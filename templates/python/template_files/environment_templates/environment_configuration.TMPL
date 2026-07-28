@@ -20,19 +20,19 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% if config.comment|length > 0 %}  // {{config.comment}}
 {% endif %}
   {% if config.isrand %}rand {% endif %}{{config.type}} {{config.name}}{% if config.unpackedDim != '' %} {{config.unpackedDim}} {% endif %}{% if config.value != '' %} = {{config.value}}{% endif %};
-{% endfor -%}
+{% endfor %}
 
-//Constraints for the configuration variables:
+  //Constraints for the configuration variables:
 {% for cnstr in configVarsConstraints %}
 {% if cnstr.comment|length > 0 %}  // {{cnstr.comment}}
 {% endif %}
   constraint {{cnstr.name}} {{cnstr.type}}
-{% endfor -%}
+{% endfor %}
 
 {% for regModel in regModels %}
-// Instantiate the register model
-  {{regModel.regBlockClass}}  {{regModel.regBlockInstance}};
-{% endfor -%}
+  // Instantiate the register model
+  {{regModel.regBlockClass}} {{regModel.regBlockInstance}};
+{% endfor %}
 
   covergroup {{name}}_configuration_cg;
     // pragma uvmf custom covergroup begin
@@ -102,8 +102,8 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
   // ****************************************************************************
   // FUNCTION : set_vsqr()
   // This function is used to assign the vsqr handle.
-  virtual function void set_vsqr( {{name}}_vsqr_t vsqr);
-     this.vsqr = vsqr;
+  virtual function void set_vsqr({{name}}_vsqr_t vsqr);
+    this.vsqr = vsqr;
   endfunction : set_vsqr
 
   // ****************************************************************************
@@ -158,13 +158,7 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
   // the agent configurations to identify the virtual interface handle to pull from
   // the uvm_config_db.
 
-  function void initialize(
-     uvmf_sim_level_t sim_level,
-     string environment_path,
-     string interface_names[],
-     uvm_reg_block register_model = null,
-     uvmf_active_passive_t interface_activity[] = {}
-  );
+  function void initialize(uvmf_sim_level_t sim_level, string environment_path, string interface_names[], uvm_reg_block register_model = null, uvmf_active_passive_t interface_activity[] = {});
 
     super.initialize(sim_level, environment_path, interface_names, register_model, interface_activity);
 

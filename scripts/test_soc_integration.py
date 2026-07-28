@@ -421,17 +421,66 @@ class SocIntegrationTest(unittest.TestCase):
       tests_pkg = (tb / "tests" / "soc_tests_pkg.sv").read_text(encoding="utf-8")
       self.assertNotIn("import bus_pkg::*;",tests_pkg)
       self.assertNotIn("import bus_pkg_hdl::*;",tests_pkg)
+      self.assertIn(
+        "  import uvm_pkg::*;\n"
+        "  import uvmf_base_pkg::*;\n"
+        "  import soc_parameters_pkg::*;\n"
+        "  import soc_env_pkg::*;",
+        tests_pkg,
+      )
+      self.assertIn('  `include "uvm_macros.svh"',tests_pkg)
+      self.assertIn('  `include "src/test_top.sv"',tests_pkg)
       self.assertFalse((tb / "sequences" / "BUILD").exists())
       hvl_top = (tb / "testbench" / "hvl_top.sv").read_text(encoding="utf-8")
       hdl_top = (tb / "testbench" / "hdl_top.sv").read_text(encoding="utf-8")
       self.assertIn('`include "cmn_tb_top.svh"',hvl_top)
       self.assertIn("function pre_run_test();",hvl_top)
       self.assertEqual(hvl_top.count("pre_run_test()"),1)
-      self.assertIn("//   run_test();",hvl_top)
+      self.assertIn(
+        "  function pre_run_test();\n"
+        "    // pragma uvmf custom pre_run_test begin\n"
+        "    // pragma uvmf custom pre_run_test end\n"
+        "  endfunction : pre_run_test",
+        hvl_top,
+      )
+      self.assertIn(
+        "  //initial begin\n"
+        "  //  $timeformat(-9,3,\"ns\",5);\n"
+        "  //  run_test();\n"
+        "  //end",
+        hvl_top,
+      )
       self.assertNotIn("\n    run_test();",hvl_top)
+      self.assertIn(
+        "  import soc_parameters_pkg::*;\n"
+        "  import uvmf_base_pkg_hdl::*;",
+        hdl_top,
+      )
       for invalid_symbol in ("verilog_dut","vhdl_dut","vhdl_to_verilog_signal","verilog_to_vhdl_signal"):
         self.assertNotIn(invalid_symbol,hdl_top)
       self.assertIn("pragma uvmf custom dut_instantiation begin",hdl_top)
+      parameters_pkg = (tb / "parameters" / "soc_parameters_pkg.sv").read_text(encoding="utf-8")
+      self.assertIn("  // These parameters are used to uniquely identify each interface.",parameters_pkg)
+      test_top = (tb / "tests" / "src" / "test_top.sv").read_text(encoding="utf-8")
+      self.assertIn(
+        "typedef soc_env_sequence_base #(\n"
+        "  .CONFIG_T(soc_env_configuration_t),\n"
+        "  .ENV_T   (soc_environment_t)\n"
+        ") soc_env_sequence_base_t;",
+        test_top,
+      )
+      self.assertIn(
+        "class test_top extends uvmf_test_base #(\n"
+        "  .CONFIG_T       (soc_env_configuration_t),\n"
+        "  .ENV_T          (soc_environment_t),\n"
+        "  .TOP_LEVEL_SEQ_T(soc_env_sequence_base_t)\n"
+        ");",
+        test_top,
+      )
+      self.assertIn("  `uvm_component_utils(test_top)",test_top)
+      self.assertIn('  function new(string name = "", uvm_component parent = null);',test_top)
+      self.assertIn("    super.new(name, parent);",test_top)
+      self.assertIn("  virtual task run_phase(uvm_phase phase);",test_top)
 
   def test_vcs_and_xcelium_profiles_generate_simulator_specific_builds(self):
     with tempfile.TemporaryDirectory() as tmp:
@@ -851,7 +900,7 @@ class SocIntegrationTest(unittest.TestCase):
         guard = "_{}__{}__".format(path.stem.upper(),suffix)
         content = path.read_text(encoding="utf-8")
         self.assertTrue(content.startswith("`ifndef {}\n`define {}\n".format(guard,guard)),path)
-        self.assertTrue(content.rstrip().endswith("`endif // {}".format(guard)),path)
+        self.assertTrue(content.rstrip().endswith("`endif  // {}".format(guard)),path)
         self.assertNotRegex(content,r"(?m)^\s*end(?:class|function|task|package|module|interface|group)\s*(?://.*)?$")
         self.assertNotRegex(content,r"(?m)^\s*//\s*(?:FUNCTION|TASK)\s*:")
         if path.suffix == ".svh":
@@ -879,8 +928,48 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertIn("type ENV_T = uvm_env",sequence)
       self.assertIn("env.ip0.vsqr",sequence)
       self.assertIn("vsqr.set_env(this)",environment)
-      self.assertIn(".ENV_T(soc_environment_t)",test_top)
+      self.assertIn(".ENV_T   (soc_environment_t)",test_top)
       self.assertIn("top_level_sequence.start(environment.vsqr)",test_top)
+      self.assertIn(
+        "class soc_env_sequence_base #(\n"
+        "  type CONFIG_T,\n"
+        "  type ENV_T = uvm_env\n"
+        ") extends uvmf_virtual_sequence_base #(\n"
+        "  .CONFIG_T(CONFIG_T),\n"
+        "  .ENV_T   (ENV_T)\n"
+        ");",
+        sequence,
+      )
+      self.assertIn(
+        "`uvm_object_param_utils(soc_env_sequence_base#(CONFIG_T, ENV_T))",
+        sequence,
+      )
+      self.assertIn('  function new(string name = "");',sequence)
+      self.assertIn("    // pragma uvmf custom new_additional begin",sequence)
+      self.assertIn("    // pragma uvmf custom body begin",sequence)
+      self.assertIn(
+        "class soc_environment extends uvmf_environment_base #(\n"
+        "  .CONFIG_T(soc_env_configuration)\n"
+        ");",
+        environment,
+      )
+      self.assertIn("  `uvm_component_utils(soc_environment)",environment)
+      self.assertIn(
+        "  typedef uvmf_virtual_sequencer_base#(.CONFIG_T(soc_env_configuration)) soc_vsqr_t;",
+        environment,
+      )
+      self.assertIn('  function new(string name = "", uvm_component parent = null);',environment)
+      self.assertIn("    configuration.soc_configuration_cg.sample();",environment)
+      configuration = (package / "src" / "soc_env_configuration.sv").read_text(encoding="utf-8")
+      self.assertIn("  `uvm_object_utils(soc_env_configuration)",configuration)
+      self.assertIn("  virtual function void set_vsqr(soc_vsqr_t vsqr);",configuration)
+      self.assertIn("    this.vsqr = vsqr;",configuration)
+      self.assertIn(
+        "  function void initialize(uvmf_sim_level_t sim_level, string environment_path, "
+        "string interface_names[], uvm_reg_block register_model = null, "
+        "uvmf_active_passive_t interface_activity[] = {});",
+        configuration,
+      )
       tests_pkg = (output / "project_benches" / "soc" / "tb" / "tests" / "soc_tests_pkg.sv").read_text(encoding="utf-8")
       self.assertNotIn("soc_sequences_pkg",tests_pkg)
       self.assertNotIn("soc_bench_sequence_base",tests_pkg)

@@ -378,7 +378,7 @@ class BaseGeneratorClass(BaseElementClass):
     guard = '_'+re.sub(r'[^A-Za-z0-9]+','_',stem).upper()+'__'+extension[1:].upper()+'__'
     if re.search(r'^\s*`ifndef\s+'+re.escape(guard)+r'\s*$',content,re.MULTILINE):
       return content
-    return '`ifndef {0}\n`define {0}\n\n{1}\n`endif // {0}\n'.format(guard,content.rstrip())
+    return '`ifndef {0}\n`define {0}\n\n{1}\n`endif  // {0}\n'.format(guard,content.rstrip())
 
   def labelNamedEndKeywords(self,content):
     """Add labels to named SystemVerilog construct terminators."""
