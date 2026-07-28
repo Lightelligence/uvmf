@@ -19,15 +19,17 @@
 typedef {{env_name}}_env_configuration {{macro.paramUseNested(envParamDefs)|indent(8)}}{{env_name}}_env_configuration_t;
 typedef {{env_name}}_environment {{macro.paramUseNested(envParamDefs)|indent(8)}}{{env_name}}_environment_t;
 typedef {{env_name}}_env_sequence_base #(
-                                        .CONFIG_T({{env_name}}_env_configuration_t),
-                                        .ENV_T({{env_name}}_environment_t)
-                                        ) {{env_name}}_env_sequence_base_t;
+  .CONFIG_T({{env_name}}_env_configuration_t),
+  .ENV_T   ({{env_name}}_environment_t)
+) {{env_name}}_env_sequence_base_t;
 
-class test_top extends uvmf_test_base #(.CONFIG_T({{env_name}}_env_configuration_t),
-                                        .ENV_T({{env_name}}_environment_t),
-                                        .TOP_LEVEL_SEQ_T({{env_name}}_env_sequence_base_t));
+class test_top extends uvmf_test_base #(
+  .CONFIG_T       ({{env_name}}_env_configuration_t),
+  .ENV_T          ({{env_name}}_environment_t),
+  .TOP_LEVEL_SEQ_T({{env_name}}_env_sequence_base_t)
+);
 
-  `uvm_component_utils( test_top )
+  `uvm_component_utils(test_top)
 
 {% if useCoEmuClkRstGen %}
   //variable: clk_ctrl
@@ -79,9 +81,9 @@ class test_top extends uvmf_test_base #(.CONFIG_T({{env_name}}_env_configuration
   // This is the standard systemVerilog constructor.  All components are
   // constructed in the build_phase to allow factory overriding.
 
-  function new( string name = "", uvm_component parent = null );
-     super.new( name ,parent );
-  endfunction
+  function new(string name = "", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction : new
 
 {% if useCoEmuClkRstGen %}
   // ****************************************************************************
@@ -129,8 +131,8 @@ class test_top extends uvmf_test_base #(.CONFIG_T({{env_name}}_env_configuration
 
   virtual function void build_phase(uvm_phase phase);
 
-  // pragma uvmf custom build_phase_pre_super begin
-  // pragma uvmf custom build_phase_pre_super end
+    // pragma uvmf custom build_phase_pre_super begin
+    // pragma uvmf custom build_phase_pre_super end
 
     super.build_phase(phase);
 {% if bench_plusargs|length > 0 %}
@@ -162,14 +164,14 @@ class test_top extends uvmf_test_base #(.CONFIG_T({{env_name}}_env_configuration
   // sequencer. Tests can override {{env_name}}_env_sequence_base_t to select
   // a scenario without generating a bench-level sequence package.
 
-  virtual task run_phase( uvm_phase phase );
+  virtual task run_phase(uvm_phase phase);
     phase.raise_objection(this, "Objection raised by test_top");
     `uvm_info("CFG", configuration.convert2string(), UVM_HIGH);
     top_level_sequence.start(environment.vsqr);
     phase.drop_objection(this, "Objection dropped by test_top");
-  endtask
+  endtask : run_phase
 
-endclass
+endclass : test_top
 
 // pragma uvmf custom external begin
 // pragma uvmf custom external end

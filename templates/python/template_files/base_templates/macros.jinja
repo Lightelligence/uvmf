@@ -57,17 +57,17 @@
 {# Produce a component utils declaration. If paramlist is not empty, will make it parameterized #}
 {% macro compUtils(name,paramlist) -%}
 {% if paramlist|length > 0 %}
-  `uvm_component_param_utils( {{name}} {{paramList(paramlist)|indent(30)}})
+  `uvm_component_param_utils({{name}}{{paramList(paramlist)|indent(29)}})
 {%- else %}
-  `uvm_component_utils( {{name}} )
+  `uvm_component_utils({{name}})
 {%- endif -%}
 {% endmacro %}
 
 {# Produce an object utils declaration. If paramlist is not empty, will make it parameterized #}
 {% macro objUtils(name,paramlist) -%}
 {% if paramlist|length > 0 %}
-  `uvm_object_param_utils( {{name}} {{paramList(paramlist)|indent(27)}})
+  `uvm_object_param_utils({{name}}{{paramList(paramlist)|indent(26)}})
 {%- else %}
-  `uvm_object_utils( {{name}} )
+  `uvm_object_utils({{name}})
 {%- endif -%}
 {% endmacro %}

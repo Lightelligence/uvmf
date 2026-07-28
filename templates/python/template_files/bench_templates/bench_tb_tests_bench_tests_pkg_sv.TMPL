@@ -18,25 +18,25 @@
 
 package {{name}}_tests_pkg;
 
-   import uvm_pkg::*;
-   import uvmf_base_pkg::*;
-   import {{name}}_parameters_pkg::*;
-   import {{env_name}}_env_pkg::*;
+  import uvm_pkg::*;
+  import uvmf_base_pkg::*;
+  import {{name}}_parameters_pkg::*;
+  import {{env_name}}_env_pkg::*;
 {% for ext_import in external_imports %}
-   import {{ext_import}}::*;
+  import {{ext_import}}::*;
 {% endfor %}
 
 {% if useCoEmuClkRstGen %}
-   import clock_pkg::*;
-   import reset_pkg::*;
+  import clock_pkg::*;
+  import reset_pkg::*;
 {% endif %}
 
-   `include "uvm_macros.svh"
+  `include "uvm_macros.svh"
 
   // pragma uvmf custom package_imports_additional begin
   // pragma uvmf custom package_imports_additional end
 
-   `include "{{src_dir}}test_top.sv"
+  `include "{{src_dir}}test_top.sv"
 
   // pragma uvmf custom package_item_additional begin
   // UVMF_CHANGE_ME : When adding new tests to the src directory

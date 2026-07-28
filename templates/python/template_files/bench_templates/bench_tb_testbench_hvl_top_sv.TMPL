@@ -33,16 +33,16 @@ module hvl_top;
 {% endfor %}
 
   function pre_run_test();
-  // pragma uvmf custom pre_run_test begin
-  // pragma uvmf custom pre_run_test end
+    // pragma uvmf custom pre_run_test begin
+    // pragma uvmf custom pre_run_test end
   endfunction : pre_run_test
 
   `include "cmn_tb_top.svh"
 
-  // initial begin
-  //   $timeformat(-9,3,"ns",5);
-  //   run_test();
-  // end
+  //initial begin
+  //  $timeformat(-9,3,"ns",5);
+  //  run_test();
+  //end
 
 endmodule
 

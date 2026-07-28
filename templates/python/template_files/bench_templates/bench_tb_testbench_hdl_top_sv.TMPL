@@ -22,11 +22,11 @@
 
 module hdl_top;
 
-import {{name}}_parameters_pkg::*;
+  import {{name}}_parameters_pkg::*;
 {% for agent in qvip_bfm_pkgs %}
-import {{agent}}_params_pkg::*;
+  import {{agent}}_params_pkg::*;
 {% endfor %}
-import uvmf_base_pkg_hdl::*;
+  import uvmf_base_pkg_hdl::*;
 
 {% if veloceReady %}
   // pragma attribute hdl_top partition_module_xrtl
@@ -109,8 +109,7 @@ import uvmf_base_pkg_hdl::*;
   // Instantiate your DUT here
   // pragma uvmf custom dut_instantiation end
 
-  initial begin  {% if veloceReady %}    // tbx vif_binding_block
-{% endif %}
+  initial begin{% if veloceReady %}  // tbx vif_binding_block{% endif %}
     import uvm_pkg::uvm_config_db;
 {% if useDpiLink %}
 {% else %}
