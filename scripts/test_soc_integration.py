@@ -300,7 +300,7 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertEqual(soc_build_content.count('"@dv_common//cmn:pkg"'),1)
       self.assertEqual(soc_build_content.count('"@cluelib_pkg//:pkg"'),1)
       self.assertEqual(soc_build_content.count('"@svlib_pkg//:pkg"'),1)
-      self.assertNotIn('"src/*_intf.sv"',soc_build_content)
+      self.assertIn('"src/*_intf.sv"',soc_build_content)
       self.assertNotIn("deps_before_generated",soc_build_content)
       for sv_file in output.rglob("*.sv"):
         self.assertNotIn("import bus_pkg_hdl::*;",sv_file.read_text(encoding="utf-8"),str(sv_file))

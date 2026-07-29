@@ -18,6 +18,10 @@ verilog_dv_library(
         # pragma uvmf custom in_flist_prepend end
     ] + glob([
         "*_pkg.sv",
+{% if is_top_env %}
+    ]) + glob([
+        "src/*_intf.sv",
+{% endif %}
     ]),
     deps = [
 {% if is_top_env %}
