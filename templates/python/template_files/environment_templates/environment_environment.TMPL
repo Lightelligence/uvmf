@@ -94,11 +94,13 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 {% endif %}
 {% endfor %}
 
+{% if is_top_env %}
   typedef {{name}}_virtual_sequencer #(
     .CONFIG_T({{name}}_env_configuration{{macro.paramUse(paramDefs)|indent(14)}}){% for param in paramDefs %},
     .{{param.name}}({{param.name}}){% endfor %}{{ "\n  " -}}
 ) {{name}}_vsqr_t;
   {{name}}_vsqr_t vsqr;
+{% endif %}
 
   // pragma uvmf custom class_item_additional begin
   // pragma uvmf custom class_item_additional end
@@ -173,10 +175,12 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
     // pragma uvmf custom reg_model_build_phase end
 {% endfor %}
 
+{% if is_top_env %}
     vsqr = {{name}}_vsqr_t::type_id::create("vsqr", this);
     vsqr.set_config(configuration);
     vsqr.set_env(this);
     configuration.set_vsqr(vsqr);
+{% endif %}
 
     // pragma uvmf custom build_phase begin
     // pragma uvmf custom build_phase end
@@ -195,10 +199,9 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 
     super.connect_phase(phase);
 {% for agent in agents %}
+{% if is_top_env %}
     vsqr.{{agent.name}}_sequencer = {{agent.name}}.sequencer;
-{% endfor %}
-{% for sub_env in subEnvironments %}
-    vsqr.{{sub_env.name}}_sequencer = {{sub_env.name}}.vsqr;
+{% endif %}
 {% endfor %}
 {% for conn in connections %}
     {{conn.name}}.{{conn.pName}}.connect({{conn.subscriberName}}.{{conn.aeName}});

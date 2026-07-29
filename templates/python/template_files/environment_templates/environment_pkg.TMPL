@@ -9,7 +9,9 @@
 
 // CONTAINS:
 //     - <{{name}}_configuration.sv>
+{% if is_top_env %}
 //     - <{{name}}_virtual_sequencer.sv>
+{% endif %}
 //     - <{{name}}_environment.sv>
 //     - <{{name}}_env_sequence_base.sv>
 {% for acName in acTypes %}
@@ -71,7 +73,9 @@ package {{name}}_env_pkg;
   // pragma uvmf custom package_item_after_configuration begin
   // pragma uvmf custom package_item_after_configuration end
 
+{% if is_top_env %}
   `include "{{src_dir}}{{name}}_virtual_sequencer.sv"
+{% endif %}
 {% for acName in acTypes %}
   `include "{{src_dir}}{{acName}}.sv"
 {% endfor %}

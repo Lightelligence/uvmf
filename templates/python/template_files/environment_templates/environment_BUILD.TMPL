@@ -18,8 +18,6 @@ verilog_dv_library(
         # pragma uvmf custom in_flist_prepend end
     ] + glob([
         "*_pkg.sv",
-    ]) + glob([
-        "src/*_intf.sv",
     ]),
     deps = [
 {% if is_top_env %}
@@ -30,8 +28,6 @@ verilog_dv_library(
         "@cluelib_pkg//:pkg",
         "@svlib_pkg//:pkg",
 {% endif %}
-        # pragma uvmf custom deps_before_generated begin
-        # pragma uvmf custom deps_before_generated end
 {% if is_top_env %}
 {% for pkg in agent_pkgs %}
         "//hw/dv/verification_ip/interface_packages/{{pkg}}_pkg:pkg",

@@ -278,6 +278,7 @@ class SocIntegrationTest(unittest.TestCase):
       in_flist = ip_build_content.split("in_flist =",1)[1].split("deps =",1)[0]
       self.assertNotIn('"src/ip_env_typedefs.svh"',in_flist)
       self.assertNotIn('"registers/',in_flist)
+      self.assertNotIn('"src/*_intf.sv"',in_flist)
       self.assertIn('glob([\n        "*_pkg.sv",',in_flist)
       self.assertIn("pragma uvmf custom in_flist_prepend begin",in_flist)
       self.assertEqual(ip_build_content.count('"@dv_common//cmn:pkg"'),1)
@@ -299,20 +300,8 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertEqual(soc_build_content.count('"@dv_common//cmn:pkg"'),1)
       self.assertEqual(soc_build_content.count('"@cluelib_pkg//:pkg"'),1)
       self.assertEqual(soc_build_content.count('"@svlib_pkg//:pkg"'),1)
-      self.assertLess(
-        soc_build_content.index('"@svlib_pkg//:pkg"'),
-        soc_build_content.index("pragma uvmf custom deps_before_generated begin"),
-      )
-      self.assertLess(
-        soc_build_content.index("pragma uvmf custom deps_before_generated end"),
-        soc_build_content.index(
-          '"//hw/dv/verification_ip/environment_packages/ip_env_pkg:pkg"'
-        ),
-      )
-      self.assertEqual(
-        soc_build_content.count("pragma uvmf custom deps_before_generated begin"),
-        1,
-      )
+      self.assertNotIn('"src/*_intf.sv"',soc_build_content)
+      self.assertNotIn("deps_before_generated",soc_build_content)
       for sv_file in output.rglob("*.sv"):
         self.assertNotIn("import bus_pkg_hdl::*;",sv_file.read_text(encoding="utf-8"),str(sv_file))
 
@@ -985,7 +974,24 @@ class SocIntegrationTest(unittest.TestCase):
       root = Path(tmp)
       config = root / "soc.yaml"
       output = root / "output"
-      config.write_text(BASE_YAML,encoding="utf-8")
+      config.write_text(
+        BASE_YAML.replace(
+          "    soc:\n"
+          "      subenvs:\n",
+          "    soc:\n"
+          "      agents:\n"
+          "        - name: soc_agent\n"
+          "          type: bus\n"
+          "          initiator_responder: INITIATOR\n"
+          "      subenvs:\n",
+        ).replace(
+          "      active_passive:\n",
+          "      active_passive:\n"
+          "        - path: environment.soc_agent\n"
+          "          value: ACTIVE\n",
+        ),
+        encoding="utf-8",
+      )
       result = self.run_generator(
         config,output,"-g","environment:ip","-g","environment:soc","-g","bench:soc"
       )
@@ -993,24 +999,26 @@ class SocIntegrationTest(unittest.TestCase):
       package = output / "verification_ip" / "environment_packages" / "soc_env_pkg"
       sequence = (package / "src" / "soc_env_sequence_base.sv").read_text(encoding="utf-8")
       virtual_sequencer = (package / "src" / "soc_virtual_sequencer.sv").read_text(encoding="utf-8")
-      ip_virtual_sequencer = (
+      ip_package = (
         output
         / "verification_ip"
         / "environment_packages"
         / "ip_env_pkg"
-        / "src"
-        / "ip_virtual_sequencer.sv"
-      ).read_text(encoding="utf-8")
+      )
       environment = (package / "src" / "soc_environment.sv").read_text(encoding="utf-8")
       package_source = (package / "soc_env_pkg.sv").read_text(encoding="utf-8")
       test_top = (output / "project_benches" / "soc" / "tb" / "tests" / "src" / "test_top.sv").read_text(encoding="utf-8")
       self.assertIn("type ENV_T = uvm_env",sequence)
-      self.assertIn("env.ip0.vsqr",sequence)
-      self.assertIn("p_sequencer.ip0_sequencer",sequence)
+      self.assertIn("p_sequencer.soc_agent_sequencer",sequence)
+      self.assertNotIn("p_sequencer.ip0_sequencer",sequence)
       self.assertIn("`uvm_declare_p_sequencer(virtual_sequencer_t)",sequence)
       self.assertIn("class soc_virtual_sequencer #(",virtual_sequencer)
-      self.assertIn("ip0_sequencer_t ip0_sequencer;",virtual_sequencer)
-      self.assertIn("agent0_sequencer_t agent0_sequencer;",ip_virtual_sequencer)
+      self.assertIn("soc_agent_sequencer_t soc_agent_sequencer;",virtual_sequencer)
+      self.assertFalse((ip_package / "src" / "ip_virtual_sequencer.sv").exists())
+      self.assertNotIn(
+        "ip_virtual_sequencer.sv",
+        (ip_package / "ip_env_pkg.sv").read_text(encoding="utf-8"),
+      )
       configuration_include = package_source.index('`include "src/soc_env_configuration.sv"')
       custom_block = package_source.index(
         "pragma uvmf custom package_item_after_configuration begin"
@@ -1021,7 +1029,11 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertLess(configuration_include,custom_block)
       self.assertLess(custom_block,virtual_sequencer_include)
       self.assertIn("vsqr.set_env(this)",environment)
-      self.assertIn("vsqr.ip0_sequencer = ip0.vsqr;",environment)
+      self.assertIn(
+        "vsqr.soc_agent_sequencer = soc_agent.sequencer;",
+        environment,
+      )
+      self.assertNotIn("vsqr.ip0_sequencer",environment)
       self.assertIn(".ENV_T   (soc_environment_t)",test_top)
       self.assertIn("top_level_sequence.start(environment.vsqr)",test_top)
       self.assertIn(
@@ -1057,6 +1069,15 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertIn('  function new(string name = "", uvm_component parent = null);',environment)
       self.assertIn("    configuration.soc_configuration_cg.sample();",environment)
       configuration = (package / "src" / "soc_env_configuration.sv").read_text(encoding="utf-8")
+      ip_configuration = (
+        ip_package / "src" / "ip_env_configuration.sv"
+      ).read_text(encoding="utf-8")
+      ip_environment = (
+        ip_package / "src" / "ip_environment.sv"
+      ).read_text(encoding="utf-8")
+      ip_sequence = (
+        ip_package / "src" / "ip_env_sequence_base.sv"
+      ).read_text(encoding="utf-8")
       self.assertIn("  `uvm_object_utils(soc_env_configuration)",configuration)
       self.assertIn(
         "  typedef uvmf_virtual_sequencer_base #(\n"
@@ -1071,6 +1092,11 @@ class SocIntegrationTest(unittest.TestCase):
       )
       self.assertIn("  virtual function void set_vsqr(soc_vsqr_t vsqr);",configuration)
       self.assertIn("    this.vsqr = vsqr;",configuration)
+      self.assertNotIn("ip_vsqr_t",ip_configuration)
+      self.assertNotIn("set_vsqr",ip_configuration)
+      self.assertNotRegex(ip_environment,r"\bvsqr\b")
+      self.assertNotIn("`uvm_declare_p_sequencer",ip_sequence)
+      self.assertNotIn("virtual_sequencer_t",ip_sequence)
       self.assertIn(
         "  function void initialize(uvmf_sim_level_t sim_level, string environment_path, "
         "string interface_names[], uvm_reg_block register_model = null, "

@@ -1040,6 +1040,8 @@ class DataClass:
     valid_qsubenv_list = []
     env_has_extdef_items = False
     env = self.setupGlobalVars(env)
+    if env.is_top_env:
+      env.conditional_array.append('top_env')
     env.planned_interface_packages = set(self.plannedInterfacePackages)
     env.planned_environment_packages = set(self.plannedEnvironmentPackages)
     ## Extract any environment-level parameters and add them

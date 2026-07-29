@@ -66,10 +66,12 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
     uvmf_active_passive_t                    {{sub_env.name}}_interface_activity[];
 {% endfor %}
 
+{% if is_top_env %}
   typedef uvmf_virtual_sequencer_base #(
     .CONFIG_T({{name}}_env_configuration{{macro.paramUse(paramDefs)|indent(14)}})
   ) {{name}}_vsqr_t;
   {{name}}_vsqr_t vsqr;
+{% endif %}
 
   // pragma uvmf custom class_item_additional begin
   // pragma uvmf custom class_item_additional end
@@ -101,6 +103,7 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
     // pragma uvmf custom new end
   endfunction
 
+{% if is_top_env %}
   // ****************************************************************************
   // FUNCTION : set_vsqr()
   // This function is used to assign the vsqr handle.
@@ -108,6 +111,7 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
     this.vsqr = vsqr;
   endfunction : set_vsqr
 
+{% endif %}
   // ****************************************************************************
   // FUNCTION: post_randomize()
   // This function is automatically called after the randomize() function

@@ -1,4 +1,5 @@
 {% set fname = "{{vip_location}}/{{environment_location}}/{{name}}_env_pkg/{{src_dir}}{{name}}_virtual_sequencer.sv" %}
+{% set conditional = "top_env" %}
 {% extends "base_template.TMPL" %}
 
 {% block description %}
@@ -25,13 +26,6 @@ class {{name}}_virtual_sequencer #(
     {{agent.ifPkg}}_transaction{{macro.paramUseNested(agent.parameters)|indent(4)}}
   ) {{agent.name}}_sequencer_t;
   {{agent.name}}_sequencer_t {{agent.name}}_sequencer;
-
-{% endfor %}
-{% for sub_env in subEnvironments %}
-  typedef uvmf_virtual_sequencer_base #(
-    .CONFIG_T({{sub_env.envPkg}}_env_configuration{{macro.paramUseNested(sub_env.parameters)|indent(14)}})
-  ) {{sub_env.name}}_sequencer_t;
-  {{sub_env.name}}_sequencer_t {{sub_env.name}}_sequencer;
 
 {% endfor %}
   // pragma uvmf custom class_item_additional begin
