@@ -639,6 +639,34 @@ class SocIntegrationTest(unittest.TestCase):
       backup_build = backup / "project_benches" / "soc" / "tb" / "BUILD"
       self.assertIn("# outside custom block",backup_build.read_text(encoding="utf-8"))
 
+  def test_merge_does_not_change_generated_build_files(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config = root / "soc.yaml"
+      output = root / "output"
+      config.write_text(BASE_YAML,encoding="utf-8")
+      generation_args = (
+        "-g","interface:bus",
+        "-g","environment:ip",
+        "-g","environment:soc",
+        "-g","bench:soc",
+      )
+      first = self.run_generator(config,output,*generation_args)
+      self.assertEqual(first.returncode,0,first.stderr)
+
+      build_files = sorted(output.rglob("BUILD"))
+      self.assertTrue(build_files)
+      original_contents = {path:path.read_bytes() for path in build_files}
+      for path,content in original_contents.items():
+        self.assertTrue(content.endswith(b"\n"),path)
+
+      merged = self.run_generator(
+        config,output,*generation_args,"--merge_source="+str(output)
+      )
+      self.assertEqual(merged.returncode,0,merged.stderr)
+      for path,content in original_contents.items():
+        self.assertEqual(path.read_bytes(),content,path)
+
   def test_merge_preserves_exported_tb_defines_used_by_environment_build(self):
     with tempfile.TemporaryDirectory() as tmp:
       root = Path(tmp)
