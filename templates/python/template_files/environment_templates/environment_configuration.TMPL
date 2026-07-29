@@ -66,10 +66,9 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
     uvmf_active_passive_t                    {{sub_env.name}}_interface_activity[];
 {% endfor -%}
 
-  typedef {{name}}_virtual_sequencer #(
-    .CONFIG_T({{name}}_env_configuration{{macro.paramUse(paramDefs)|indent(14)}}){% for param in paramDefs %},
-    .{{param.name}}({{param.name}}){% endfor %}{{ "\n  " -}}
-) {{name}}_vsqr_t;
+  typedef uvmf_virtual_sequencer_base #(
+    .CONFIG_T({{name}}_env_configuration{{macro.paramUse(paramDefs)|indent(14)}})
+  ) {{name}}_vsqr_t;
   {{name}}_vsqr_t vsqr;
 
   // pragma uvmf custom class_item_additional begin

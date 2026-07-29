@@ -66,8 +66,12 @@ package {{name}}_env_pkg;
   `include "registers/{{regModel.regBlockClass}}.sv"
 {% endfor %}
 
-  `include "{{src_dir}}{{name}}_virtual_sequencer.sv"
   `include "{{src_dir}}{{name}}_env_configuration.sv"
+
+  // pragma uvmf custom package_item_after_configuration begin
+  // pragma uvmf custom package_item_after_configuration end
+
+  `include "{{src_dir}}{{name}}_virtual_sequencer.sv"
 {% for acName in acTypes %}
   `include "{{src_dir}}{{acName}}.sv"
 {% endfor %}

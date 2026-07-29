@@ -668,6 +668,21 @@ class SocIntegrationTest(unittest.TestCase):
         ),
         encoding="utf-8",
       )
+      environment_package = (
+        output
+        / "verification_ip"
+        / "environment_packages"
+        / "soc_env_pkg"
+        / "soc_env_pkg.sv"
+      )
+      environment_package.write_text(
+        environment_package.read_text(encoding="utf-8").replace(
+          "  // pragma uvmf custom package_item_after_configuration end",
+          "  typedef bit user_type_after_configuration;\n"
+          "  // pragma uvmf custom package_item_after_configuration end",
+        ),
+        encoding="utf-8",
+      )
       env_build = output / "verification_ip" / "environment_packages" / "soc_env_pkg" / "BUILD"
       env_build.write_text(
         env_build.read_text(encoding="utf-8").replace(
@@ -687,6 +702,10 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertIn(
         "bit user_virtual_sequencer_member;",
         virtual_sequencer.read_text(encoding="utf-8"),
+      )
+      self.assertIn(
+        "typedef bit user_type_after_configuration;",
+        environment_package.read_text(encoding="utf-8"),
       )
       self.assertIn(
         "//hw/dv/project_benches/soc/tb/testbench:tb_defines.svh",
@@ -964,10 +983,15 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertIn("class soc_virtual_sequencer #(",virtual_sequencer)
       self.assertIn("ip0_sequencer_t ip0_sequencer;",virtual_sequencer)
       self.assertIn("agent0_sequencer_t agent0_sequencer;",ip_virtual_sequencer)
-      self.assertLess(
-        package_source.index('`include "src/soc_virtual_sequencer.sv"'),
-        package_source.index('`include "src/soc_env_configuration.sv"'),
+      configuration_include = package_source.index('`include "src/soc_env_configuration.sv"')
+      custom_block = package_source.index(
+        "pragma uvmf custom package_item_after_configuration begin"
       )
+      virtual_sequencer_include = package_source.index(
+        '`include "src/soc_virtual_sequencer.sv"'
+      )
+      self.assertLess(configuration_include,custom_block)
+      self.assertLess(custom_block,virtual_sequencer_include)
       self.assertIn("vsqr.set_env(this)",environment)
       self.assertIn("vsqr.ip0_sequencer = ip0.vsqr;",environment)
       self.assertIn(".ENV_T   (soc_environment_t)",test_top)
