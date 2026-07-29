@@ -1058,6 +1058,17 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertIn("    configuration.soc_configuration_cg.sample();",environment)
       configuration = (package / "src" / "soc_env_configuration.sv").read_text(encoding="utf-8")
       self.assertIn("  `uvm_object_utils(soc_env_configuration)",configuration)
+      self.assertIn(
+        "  typedef uvmf_virtual_sequencer_base #(\n"
+        "    .CONFIG_T(soc_env_configuration)\n"
+        "  ) soc_vsqr_t;\n"
+        "  soc_vsqr_t vsqr;",
+        configuration,
+      )
+      self.assertNotRegex(
+        configuration,
+        r"(?m)^typedef uvmf_virtual_sequencer_base",
+      )
       self.assertIn("  virtual function void set_vsqr(soc_vsqr_t vsqr);",configuration)
       self.assertIn("    this.vsqr = vsqr;",configuration)
       self.assertIn(
