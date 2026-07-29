@@ -660,7 +660,11 @@ class BaseGeneratorClass(BaseElementClass):
       paths.append(os.path.join(p,self.template_ext_dir))
       paths.append(os.path.join(p,'base_templates'))
     templateLoader = FileSystemFilterLoader(searchpath=paths,glob='*.TMPL')
-    self.templateEnv = jinja2.Environment(loader = templateLoader,trim_blocks=True)
+    self.templateEnv = jinja2.Environment(
+      loader=templateLoader,
+      trim_blocks=True,
+      keep_trailing_newline=True,
+    )
     if (desired_template == 'all'):
       templates = self.templateEnv.list_templates()
       if (len(templates) == 0):

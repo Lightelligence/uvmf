@@ -628,8 +628,6 @@ class RegenerationSafetyTest(unittest.TestCase):
         "        \"@dv_common//cmn:pkg\",\n"
         "        \"@cluelib_pkg//:pkg\",\n"
         "        \"@svlib_pkg//:pkg\",\n"
-        "        # pragma uvmf custom deps_before_generated begin\n"
-        "        # pragma uvmf custom deps_before_generated end\n"
         "        \"//hw/dv/verification_ip/interface_packages/bus_pkg:pkg\",\n"
         "        # pragma uvmf custom deps_additional begin\n"
         "        # pragma uvmf custom deps_additional end\n"
@@ -660,9 +658,10 @@ class RegenerationSafetyTest(unittest.TestCase):
       self.assertEqual(merged.count('"@vip_vcs_svt_pkg//:pkg"'),1)
       self.assertEqual(merged.count('"//custom/pkg:pkg"'),1)
       self.assertLess(
-        merged.index('"@early_custom//:pkg"'),
         merged.index('"//hw/dv/verification_ip/interface_packages/bus_pkg:pkg"'),
+        merged.index('"@early_custom//:pkg"'),
       )
+      self.assertNotIn("deps_before_generated",merged)
 
   def test_check_in_place_audits_merge_source(self):
     with tempfile.TemporaryDirectory() as tmp:

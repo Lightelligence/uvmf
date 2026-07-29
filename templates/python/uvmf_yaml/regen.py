@@ -200,6 +200,13 @@ class Merge(Base):
         pass
       old_content = self.rd[self.old_fname][label_name]['content']
       if label_name == 'deps_additional':
+        # Retire the old environment BUILD deps_before_generated block without
+        # dropping hand-written dependencies.  New templates have a single
+        # dependency customization block, so migrate any legacy content there.
+        retired = self.rd[self.old_fname].get('deps_before_generated')
+        if retired and not retired.get('block_used',False):
+          old_content = retired['content']+old_content
+          retired['block_used'] = True
         # Preserve every hand dependency except an exact active dependency that
         # is also present in the new generated file. Commented and legacy labels
         # are not assumed to be generator-owned.

@@ -22,6 +22,14 @@ class {{name}}_env_sequence_base #(
 
   `uvm_object_param_utils({{name}}_env_sequence_base#(CONFIG_T{% for param in paramDefs %}, {{param.name}}{% endfor %}, ENV_T))
 
+{% if is_top_env %}
+  typedef {{name}}_virtual_sequencer #(
+    .CONFIG_T(CONFIG_T){% for param in paramDefs %},
+    .{{param.name}}({{param.name}}){% endfor %}{{ "\n  " -}}
+) virtual_sequencer_t;
+  `uvm_declare_p_sequencer(virtual_sequencer_t)
+{% endif %}
+
 {% for regModel in regModels %}
   // Handle to the environments register model
   // This handle needs to be set before use.
@@ -40,6 +48,9 @@ class {{name}}_env_sequence_base #(
 {% for agent in agents %}
 {% if agent.initResp == "INITIATOR" %}
     // env.{{agent.name}}.sequencer
+{% if is_top_env %}
+    // p_sequencer.{{agent.name}}_sequencer
+{% endif %}
 {% endif %}
 {% endfor %}
 
@@ -47,15 +58,11 @@ class {{name}}_env_sequence_base #(
 {% for agent in agents %}
 {% if agent.initResp == "RESPONDER" %}
     // env.{{agent.name}}.sequencer
+{% if is_top_env %}
+    // p_sequencer.{{agent.name}}_sequencer
+{% endif %}
 {% endif %}
 {% endfor %}
-
-{% if subEnvironments|length > 0 %}
-  // Virtual sequencers in sub-environments located in sub-environment configuration
-{% for sub_env in subEnvironments %}
-    // env.{{sub_env.name}}.vsqr
-{% endfor %}
-{% endif %}
 
   // pragma uvmf custom class_item_additional begin
   // pragma uvmf custom class_item_additional end
