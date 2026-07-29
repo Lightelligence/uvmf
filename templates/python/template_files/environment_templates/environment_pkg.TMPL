@@ -9,6 +9,7 @@
 
 // CONTAINS:
 //     - <{{name}}_configuration.sv>
+//     - <{{name}}_virtual_sequencer.sv>
 //     - <{{name}}_environment.sv>
 //     - <{{name}}_env_sequence_base.sv>
 {% for acName in acTypes %}
@@ -65,6 +66,7 @@ package {{name}}_env_pkg;
   `include "registers/{{regModel.regBlockClass}}.sv"
 {% endfor %}
 
+  `include "{{src_dir}}{{name}}_virtual_sequencer.sv"
   `include "{{src_dir}}{{name}}_env_configuration.sv"
 {% for acName in acTypes %}
   `include "{{src_dir}}{{acName}}.sv"

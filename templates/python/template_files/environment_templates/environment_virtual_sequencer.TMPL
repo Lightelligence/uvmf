@@ -1,0 +1,52 @@
+{% set fname = "{{vip_location}}/{{environment_location}}/{{name}}_env_pkg/{{src_dir}}{{name}}_virtual_sequencer.sv" %}
+{% extends "base_template.TMPL" %}
+
+{% block description %}
+//----------------------------------------------------------------------
+
+// DESCRIPTION: This virtual sequencer provides typed handles to the
+// sequencers contained in the {{name}} environment.
+
+//----------------------------------------------------------------------
+{% endblock %}
+
+{% block contents %}
+class {{name}}_virtual_sequencer #(
+  type CONFIG_T{% for param in paramDefs %},
+  {{param.type}} {{param.name}}{% if param.value != None %} = {{param.value}}{% endif %}{% endfor %}{{ "\n" -}}
+) extends uvmf_virtual_sequencer_base #(
+  .CONFIG_T(CONFIG_T)
+);
+
+  `uvm_component_param_utils({{name}}_virtual_sequencer#(CONFIG_T{% for param in paramDefs %}, {{param.name}}{% endfor %}))
+
+{% for agent in agents %}
+  typedef uvm_sequencer #(
+    {{agent.ifPkg}}_transaction{{macro.paramUseNested(agent.parameters)|indent(4)}}
+  ) {{agent.name}}_sequencer_t;
+  {{agent.name}}_sequencer_t {{agent.name}}_sequencer;
+
+{% endfor %}
+{% for sub_env in subEnvironments %}
+  typedef uvmf_virtual_sequencer_base #(
+    .CONFIG_T({{sub_env.envPkg}}_env_configuration{{macro.paramUseNested(sub_env.parameters)|indent(14)}})
+  ) {{sub_env.name}}_sequencer_t;
+  {{sub_env.name}}_sequencer_t {{sub_env.name}}_sequencer;
+
+{% endfor %}
+  // pragma uvmf custom class_item_additional begin
+  // pragma uvmf custom class_item_additional end
+
+  function new(string name = "", uvm_component parent = null);
+    super.new(name, parent);
+
+    // pragma uvmf custom new_additional begin
+    // pragma uvmf custom new_additional end
+  endfunction : new
+
+endclass : {{name}}_virtual_sequencer
+
+// pragma uvmf custom external begin
+// pragma uvmf custom external end
+
+{% endblock %}

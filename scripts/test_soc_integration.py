@@ -652,6 +652,22 @@ class SocIntegrationTest(unittest.TestCase):
 
       tb_defines = output / "project_benches" / "soc" / "tb" / "testbench" / "tb_defines.svh"
       tb_defines.write_text("`define SOC_TB_DEFINE 1\n",encoding="utf-8")
+      virtual_sequencer = (
+        output
+        / "verification_ip"
+        / "environment_packages"
+        / "soc_env_pkg"
+        / "src"
+        / "soc_virtual_sequencer.sv"
+      )
+      virtual_sequencer.write_text(
+        virtual_sequencer.read_text(encoding="utf-8").replace(
+          "  // pragma uvmf custom class_item_additional end",
+          "  bit user_virtual_sequencer_member;\n"
+          "  // pragma uvmf custom class_item_additional end",
+        ),
+        encoding="utf-8",
+      )
       env_build = output / "verification_ip" / "environment_packages" / "soc_env_pkg" / "BUILD"
       env_build.write_text(
         env_build.read_text(encoding="utf-8").replace(
@@ -668,6 +684,10 @@ class SocIntegrationTest(unittest.TestCase):
 
       self.assertEqual(merged.returncode,0,merged.stderr)
       self.assertEqual(tb_defines.read_text(encoding="utf-8"),"`define SOC_TB_DEFINE 1\n")
+      self.assertIn(
+        "bit user_virtual_sequencer_member;",
+        virtual_sequencer.read_text(encoding="utf-8"),
+      )
       self.assertIn(
         "//hw/dv/project_benches/soc/tb/testbench:tb_defines.svh",
         env_build.read_text(encoding="utf-8"),
@@ -919,15 +939,37 @@ class SocIntegrationTest(unittest.TestCase):
       config = root / "soc.yaml"
       output = root / "output"
       config.write_text(BASE_YAML,encoding="utf-8")
-      result = self.run_generator(config,output,"-g","environment:soc","-g","bench:soc")
+      result = self.run_generator(
+        config,output,"-g","environment:ip","-g","environment:soc","-g","bench:soc"
+      )
       self.assertEqual(result.returncode,0,result.stderr)
       package = output / "verification_ip" / "environment_packages" / "soc_env_pkg"
       sequence = (package / "src" / "soc_env_sequence_base.sv").read_text(encoding="utf-8")
+      virtual_sequencer = (package / "src" / "soc_virtual_sequencer.sv").read_text(encoding="utf-8")
+      ip_virtual_sequencer = (
+        output
+        / "verification_ip"
+        / "environment_packages"
+        / "ip_env_pkg"
+        / "src"
+        / "ip_virtual_sequencer.sv"
+      ).read_text(encoding="utf-8")
       environment = (package / "src" / "soc_environment.sv").read_text(encoding="utf-8")
+      package_source = (package / "soc_env_pkg.sv").read_text(encoding="utf-8")
       test_top = (output / "project_benches" / "soc" / "tb" / "tests" / "src" / "test_top.sv").read_text(encoding="utf-8")
       self.assertIn("type ENV_T = uvm_env",sequence)
       self.assertIn("env.ip0.vsqr",sequence)
+      self.assertIn("p_sequencer.ip0_sequencer",sequence)
+      self.assertIn("`uvm_declare_p_sequencer(virtual_sequencer_t)",sequence)
+      self.assertIn("class soc_virtual_sequencer #(",virtual_sequencer)
+      self.assertIn("ip0_sequencer_t ip0_sequencer;",virtual_sequencer)
+      self.assertIn("agent0_sequencer_t agent0_sequencer;",ip_virtual_sequencer)
+      self.assertLess(
+        package_source.index('`include "src/soc_virtual_sequencer.sv"'),
+        package_source.index('`include "src/soc_env_configuration.sv"'),
+      )
       self.assertIn("vsqr.set_env(this)",environment)
+      self.assertIn("vsqr.ip0_sequencer = ip0.vsqr;",environment)
       self.assertIn(".ENV_T   (soc_environment_t)",test_top)
       self.assertIn("top_level_sequence.start(environment.vsqr)",test_top)
       self.assertIn(
@@ -955,7 +997,9 @@ class SocIntegrationTest(unittest.TestCase):
       )
       self.assertIn("  `uvm_component_utils(soc_environment)",environment)
       self.assertIn(
-        "  typedef uvmf_virtual_sequencer_base#(.CONFIG_T(soc_env_configuration)) soc_vsqr_t;",
+        "  typedef soc_virtual_sequencer #(\n"
+        "    .CONFIG_T(soc_env_configuration)\n"
+        "  ) soc_vsqr_t;",
         environment,
       )
       self.assertIn('  function new(string name = "", uvm_component parent = null);',environment)

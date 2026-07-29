@@ -94,7 +94,10 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 {% endif %}
 {% endfor %}
 
-  typedef uvmf_virtual_sequencer_base#(.CONFIG_T({{name}}_env_configuration{{macro.paramUse(paramDefs)|indent(22)}})) {{name}}_vsqr_t;
+  typedef {{name}}_virtual_sequencer #(
+    .CONFIG_T({{name}}_env_configuration{{macro.paramUse(paramDefs)|indent(14)}}){% for param in paramDefs %},
+    .{{param.name}}({{param.name}}){% endfor %}{{ "\n  " -}}
+) {{name}}_vsqr_t;
   {{name}}_vsqr_t vsqr;
 
   // pragma uvmf custom class_item_additional begin
@@ -191,6 +194,12 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
     // pragma uvmf custom connect_phase_pre_super end
 
     super.connect_phase(phase);
+{% for agent in agents %}
+    vsqr.{{agent.name}}_sequencer = {{agent.name}}.sequencer;
+{% endfor %}
+{% for sub_env in subEnvironments %}
+    vsqr.{{sub_env.name}}_sequencer = {{sub_env.name}}.vsqr;
+{% endfor %}
 {% for conn in connections %}
     {{conn.name}}.{{conn.pName}}.connect({{conn.subscriberName}}.{{conn.aeName}});
 {% endfor -%}
