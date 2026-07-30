@@ -161,8 +161,8 @@ class test_top extends uvmf_test_base #(
   // ****************************************************************************
   // TASK: run_phase()
   // Start the environment-level virtual sequence on the environment virtual
-  // sequencer. Tests can override {{env_name}}_env_sequence_base_t to select
-  // a scenario without generating a bench-level sequence package.
+  // sequencer. Select a registered derived sequence from a test configuration
+  // with +UVMF_TOP_LEVEL_SEQUENCE=<factory_type_name>.
 
   virtual task run_phase(uvm_phase phase);
     phase.raise_objection(this, "Objection raised by test_top");

@@ -112,8 +112,49 @@ class uvmf_test_base #(
 
   // FUNCTION: connect_phase
   virtual function void connect_phase(uvm_phase phase);
+    string requested_top_level_sequence;
+    uvm_object selected_sequence;
+    uvm_factory factory;
     super.connect_phase(phase);
-    top_level_sequence = TOP_LEVEL_SEQ_T::type_id::create("top_level_sequence");
+    if ($value$plusargs(
+        "UVMF_TOP_LEVEL_SEQUENCE=%s", requested_top_level_sequence
+    )) begin
+      factory = uvm_factory::get();
+      selected_sequence = factory.create_object_by_name(
+          requested_top_level_sequence, get_full_name(), "top_level_sequence"
+      );
+      if (selected_sequence == null) begin
+        `uvm_fatal(
+            "TEST",
+            $sformatf(
+                "Requested top-level sequence '%s' is not registered with the UVM factory",
+                requested_top_level_sequence
+            )
+        )
+        return;
+      end
+      if (!$cast(top_level_sequence, selected_sequence)) begin
+        `uvm_fatal(
+            "TEST",
+            $sformatf(
+                "Requested top-level sequence '%s' is incompatible with TOP_LEVEL_SEQ_T",
+                requested_top_level_sequence
+            )
+        )
+        return;
+      end
+      `uvm_info(
+          "TEST",
+          $sformatf(
+              "Selected top-level sequence '%s'", requested_top_level_sequence
+          ),
+          UVM_LOW
+      )
+    end else begin
+      top_level_sequence = TOP_LEVEL_SEQ_T::type_id::create(
+          "top_level_sequence"
+      );
+    end
   endfunction
 
   // FUNCTION: run_phase

@@ -737,6 +737,25 @@ class SocIntegrationTest(unittest.TestCase):
     ).read_text(encoding="utf-8")
     self.assertGreaterEqual(content.count('`uvm_fatal("VSQR"'),3)
 
+  def test_top_level_sequence_can_be_selected_by_factory_name(self):
+    content = (
+      REPO_ROOT / "uvmf_base_pkg" / "src" / "uvmf_test_base.svh"
+    ).read_text(encoding="utf-8")
+    self.assertIn(
+      '"UVMF_TOP_LEVEL_SEQUENCE=%s", requested_top_level_sequence',
+      content,
+    )
+    self.assertIn("factory.create_object_by_name(",content)
+    self.assertIn("$cast(top_level_sequence, selected_sequence)",content)
+    self.assertIn(
+      "is not registered with the UVM factory",
+      content,
+    )
+    self.assertIn(
+      "is incompatible with TOP_LEVEL_SEQ_T",
+      content,
+    )
+
   def test_counted_subenvironments_expand_to_independent_instances(self):
     with tempfile.TemporaryDirectory() as tmp:
       root = Path(tmp)
