@@ -22,6 +22,28 @@ The generated Bazel profile defaults to `--simulator vcs`. Select
 `--check` validates all YAML references and reports obsolete generated output
 without writing or deleting anything.
 
+## Selecting a top-level sequence
+
+The generated top-level environment sequence base is parameterized, so it
+does not have a stable factory string name for `+uvm_set_type_override`.
+Select a registered derived sequence directly instead:
+
+```python
+verilog_dv_test_cfg(
+    name = "sys_spi_apb_test",
+    inherits = [":spi_base"],
+    sim_opts = {
+        "+UVMF_TOP_LEVEL_SEQUENCE=": "sys_env_pkg::spi_apb_seq_c",
+    },
+)
+```
+
+The value must match the factory name registered by the sequence's
+`` `uvm_object_utils `` macro. The selected class must derive from the
+generated top-level environment sequence specialization. Simulation stops
+with a fatal message if the name is not registered or the type is
+incompatible.
+
 ## Synopsys VIP integration
 
 Synopsys VIP environments use the same hierarchy as any other reusable IP
