@@ -95,9 +95,9 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 
 {% for sub_env in subEnvironments %}
 {% if sub_env.isArray %}
-{% for index in sub_env.instanceIndices %}
-    {{sub_env.name}}_config[{{index}}] = {{sub_env.name}}_config_t::type_id::create("{{sub_env.instanceNames[index]}}_config");
-{% endfor %}
+    foreach ({{sub_env.name}}_config[i]) begin
+      {{sub_env.name}}_config[i] = {{sub_env.name}}_config_t::type_id::create($sformatf("{{sub_env.name}}_%0d_config", i));
+    end
 {% else %}
     {{sub_env.name}}_config = {{sub_env.name}}_config_t::type_id::create("{{sub_env.name}}_config");
 {% endif %}
@@ -213,13 +213,13 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% for sub_env in subEnvironments %}
 {% if sub_env.numAgents > 0 %}
 {% if sub_env.isArray %}
-{% for index in sub_env.instanceIndices %}
-    {{sub_env.name}}_interface_names[{{index}}]    = new[{{sub_env.numAgents}}];
-    {{sub_env.name}}_interface_activity[{{index}}] = new[{{sub_env.numAgents}}];
+    foreach ({{sub_env.name}}_interface_names[i]) begin
+      {{sub_env.name}}_interface_names[i]    = new[{{sub_env.numAgents}}];
+      {{sub_env.name}}_interface_activity[i] = new[{{sub_env.numAgents}}];
 
-    {{sub_env.name}}_interface_names[{{index}}]     = interface_names[{{sub_env.agentMinIndices[index]}}:{{sub_env.agentMaxIndices[index]}}];
-    {{sub_env.name}}_interface_activity[{{index}}]  = interface_activity[{{sub_env.agentMinIndices[index]}}:{{sub_env.agentMaxIndices[index]}}];
-{% endfor %}
+      {{sub_env.name}}_interface_names[i]     = interface_names[{{sub_env.agentMinIndex}} + i*{{sub_env.numAgents}}:{{sub_env.agentMinIndex}} + (i+1)*{{sub_env.numAgents}} - 1];
+      {{sub_env.name}}_interface_activity[i]  = interface_activity[{{sub_env.agentMinIndex}} + i*{{sub_env.numAgents}}:{{sub_env.agentMinIndex}} + (i+1)*{{sub_env.numAgents}} - 1];
+    end
 {% else %}
     {{sub_env.name}}_interface_names    = new[{{sub_env.numAgents}}];
     {{sub_env.name}}_interface_activity = new[{{sub_env.numAgents}}];
@@ -273,9 +273,9 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 
 {% for sub_env in subEnvironments %}
 {% if sub_env.isArray %}
-{% for index in sub_env.instanceIndices %}
-     {{sub_env.name}}_config[{{index}}].initialize( sim_level, {environment_path,".{{sub_env.instanceNames[index]}}"}, {{sub_env.name}}_interface_names[{{index}}], {% if ((sub_env.regModelPkg != None) and (regModels|length > 0)) %}{{regModels[0].regBlockInstance}}.{{sub_env.regBlockArrayName}}[{{index}}]{% else %}null{% endif %},   {{sub_env.name}}_interface_activity[{{index}}]);
-{% endfor %}
+     foreach ({{sub_env.name}}_config[i]) begin
+       {{sub_env.name}}_config[i].initialize( sim_level, {environment_path, $sformatf(".{{sub_env.name}}_%0d", i)}, {{sub_env.name}}_interface_names[i], {% if ((sub_env.regModelPkg != None) and (regModels|length > 0)) %}{{regModels[0].regBlockInstance}}.{{sub_env.regBlockArrayName}}[i]{% else %}null{% endif %},   {{sub_env.name}}_interface_activity[i]);
+     end
 {% else %}
      {{sub_env.name}}_config.initialize( sim_level, {environment_path,".{{sub_env.name}}"}, {{sub_env.name}}_interface_names, {% if ((sub_env.regModelPkg != None) and (regModels|length > 0)) %}{{regModels[0].regBlockInstance}}.{{sub_env.regBlockInstance}}{% else %}null{% endif %},   {{sub_env.name}}_interface_activity);
 {% endif %}

@@ -819,27 +819,37 @@ class SocIntegrationTest(unittest.TestCase):
         configuration,
       )
       self.assertIn(
-        'ucie_apb_env_config[2] = ucie_apb_env_config_t::type_id::create("ucie_apb_env_2_config");',
+        "foreach (ucie_apb_env_config[i]) begin",
         configuration,
       )
-      self.assertIn("ucie_apb_env_interface_names[2]",configuration)
-      self.assertIn("interface_names[2:2];",configuration)
+      self.assertIn("foreach (ucie_apb_env_interface_names[i]) begin",configuration)
       self.assertIn(
-        'ucie_apb_env_config[2].initialize( sim_level, {environment_path,".ucie_apb_env_2"}',
+        "ucie_apb_env_interface_names[i]     = interface_names[0 + i*1:0 + (i+1)*1 - 1];",
         configuration,
       )
+      self.assertIn(
+        'ucie_apb_env_config[i].initialize( sim_level, {environment_path, $sformatf(".ucie_apb_env_%0d", i)}',
+        configuration,
+      )
+      self.assertNotIn("ucie_apb_env_config[2] =",configuration)
+      self.assertNotIn('create("ucie_apb_env_2_config")',configuration)
       self.assertIn(
         "ucie_apb_env_t ucie_apb_env[3];",
         environment,
       )
       self.assertIn(
-        'ucie_apb_env[2] = ucie_apb_env_t::type_id::create("ucie_apb_env_2", this);',
+        "foreach (ucie_apb_env[i]) begin",
         environment,
       )
       self.assertIn(
-        "ucie_apb_env[2].set_config(configuration.ucie_apb_env_config[2]);",
+        'ucie_apb_env[i] = ucie_apb_env_t::type_id::create($sformatf("ucie_apb_env_%0d", i), this);',
         environment,
       )
+      self.assertIn(
+        "ucie_apb_env[i].set_config(configuration.ucie_apb_env_config[i]);",
+        environment,
+      )
+      self.assertNotIn("ucie_apb_env[2] =",environment)
       self.assertNotIn("rand ucie_apb_env_0_config_t ucie_apb_env_0_config;",configuration)
       self.assertNotIn("ucie_apb_env_t ucie_apb_env_0;",environment)
 
