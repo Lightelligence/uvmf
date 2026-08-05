@@ -28,7 +28,11 @@ class {{regBlockClass}} extends uvm_reg_block;
 {% endif %}
 {% for sub_env in subEnvironments %}
 {% if sub_env.regModelPkg != None %}
+{% if sub_env.isArray %}
+  {{sub_env.regBlockClass}} {{sub_env.regBlockArrayName}}[{{sub_env.instanceCount}}];
+{% else %}
   {{sub_env.regBlockClass}} {{sub_env.regBlockInstance}};
+{% endif %}
 {% endif %}
 {% endfor %}
 
@@ -52,6 +56,20 @@ class {{regBlockClass}} extends uvm_reg_block;
 
 {% for sub_env in subEnvironments %}
 {% if sub_env.regModelPkg != None %}
+{% if sub_env.isArray %}
+{% for index in sub_env.instanceIndices %}
+    {{sub_env.regBlockArrayName}}[{{index}}] = {{sub_env.regBlockClass}}::type_id::create("{{sub_env.regBlockInstances[index]}}");
+    {{sub_env.regBlockArrayName}}[{{index}}].configure(this);
+    {{sub_env.regBlockArrayName}}[{{index}}].build();
+{% if sub_env.baseAddress != None %}
+{% if busMap != None %}
+    {{busMap}}.add_submap({{sub_env.regBlockArrayName}}[{{index}}].default_map, {{sub_env.baseAddresses[index]}});
+{% else %}
+    default_map.add_submap({{sub_env.regBlockArrayName}}[{{index}}].default_map, {{sub_env.baseAddresses[index]}});
+{% endif %}
+{% endif %}
+{% endfor %}
+{% else %}
     {{sub_env.regBlockInstance}} = {{sub_env.regBlockClass}}::type_id::create("{{sub_env.regBlockInstance}}");
     {{sub_env.regBlockInstance}}.configure(this);
     {{sub_env.regBlockInstance}}.build();
@@ -60,6 +78,7 @@ class {{regBlockClass}} extends uvm_reg_block;
     {{busMap}}.add_submap({{sub_env.regBlockInstance}}.default_map, {{sub_env.baseAddress}});
 {% else %}
     default_map.add_submap({{sub_env.regBlockInstance}}.default_map, {{sub_env.baseAddress}});
+{% endif %}
 {% endif %}
 {% endif %}
 {% endif %}

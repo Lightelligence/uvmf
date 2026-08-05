@@ -19,7 +19,11 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 
 {% for sub_env in subEnvironments %}
   typedef {{sub_env.envPkg}}_environment{{macro.paramUseNested(sub_env.parameters)|indent(16)}} {{sub_env.name}}_t;
+{% if sub_env.isArray %}
+  {{sub_env.name}}_t {{sub_env.name}}[{{sub_env.instanceCount}}];
+{% else %}
   {{sub_env.name}}_t {{sub_env.name}};
+{% endif %}
 
 {% endfor -%}
 
@@ -128,8 +132,15 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
     // pragma uvmf custom build_phase_config_db end
 
 {% for sub_env in subEnvironments %}
+{% if sub_env.isArray %}
+    foreach ({{sub_env.name}}[i]) begin
+      {{sub_env.name}}[i] = {{sub_env.name}}_t::type_id::create($sformatf("{{sub_env.name}}_%0d", i), this);
+      {{sub_env.name}}[i].set_config(configuration.{{sub_env.name}}_config[i]);
+    end
+{% else %}
     {{sub_env.name}} = {{sub_env.name}}_t::type_id::create("{{sub_env.name}}", this);
     {{sub_env.name}}.set_config(configuration.{{sub_env.name}}_config);
+{% endif %}
 {% endfor %}
 {% for sub_env in vipSubEnvironments %}
     {{sub_env.name}} = {{sub_env.envPkg}}_environment#()::type_id::create("{{sub_env.name}}", this);

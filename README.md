@@ -67,6 +67,25 @@ SystemVerilog package import is preserved, while a generated local Bazel
 dependency is emitted only when that package's `BUILD` file already exists.
 Add any external VIP library dependency in the generated BUILD custom block.
 
+## Array-backed counted sub-environments
+
+Counted UVMF sub-environments remain independent instances by default. To
+generate configuration and environment handles as arrays, opt in on the
+counted sub-environment:
+
+```yaml
+    soc:
+      subenvs:
+        - name: ucie_apb_env
+          type: svt_apb
+          count: 5
+          array: true
+```
+
+This generates `ucie_apb_env_config[5]` and `ucie_apb_env[5]`, while keeping
+the UVM component names `ucie_apb_env_0` through `ucie_apb_env_4`. Register
+model names and base addresses must still use `{index}` when supplied.
+
 ## Register model hierarchy
 
 Select only the IP register models needed by the parent and provide their SoC

@@ -905,16 +905,43 @@ class StringInterfaceNamesClass(BaseElementClass):
     self.unique_id_with_underscores = unique_id_with_underscores
 
 class SubEnvironmentClass(BaseElementClass):
-  def __init__(self,name,envPkg,numAgents,agent_index,parametersDict,regModelPkg,regBlockClass,regBlockInstance,baseAddress=None):
+  def __init__(self,name,envPkg,numAgents,agent_index,parametersDict,regModelPkg,regBlockClass,regBlockInstance,baseAddress=None,instanceCount=1,isArray=False):
     super(SubEnvironmentClass,self).__init__(name)
     self.envPkg = envPkg
     self.regModelPkg = regModelPkg
     self.regBlockClass = regBlockClass
-    self.regBlockInstance = regBlockInstance
+    self.isArray = isArray
+    self.instanceCount = instanceCount if isArray else 1
+    self.instanceIndices = list(range(self.instanceCount))
+    self.instanceNames = [
+      "{0}_{1}".format(name,index) for index in self.instanceIndices
+    ] if isArray else [name]
+    self.regBlockInstancePattern = regBlockInstance
+    self.regBlockInstances = [
+      regBlockInstance.replace('{index}',str(index)) for index in self.instanceIndices
+    ] if isArray else [regBlockInstance]
+    if isArray:
+      self.regBlockArrayName = regBlockInstance.replace('{index}','')
+      while '__' in self.regBlockArrayName:
+        self.regBlockArrayName = self.regBlockArrayName.replace('__','_')
+      self.regBlockArrayName = self.regBlockArrayName.strip('_') or name+'_rm'
+    else:
+      self.regBlockArrayName = regBlockInstance
+    self.regBlockInstance = self.regBlockArrayName if isArray else regBlockInstance
     self.baseAddress = baseAddress
     self.numAgents = numAgents
     self.agentMinIndex = agent_index
-    self.agentMaxIndex = agent_index+numAgents-1
+    self.agentMinIndices = [
+      agent_index + index*numAgents for index in self.instanceIndices
+    ]
+    self.agentMaxIndices = [
+      value + numAgents - 1 for value in self.agentMinIndices
+    ]
+    self.agentMaxIndex = self.agentMaxIndices[-1]
+    self.baseAddresses = [
+      baseAddress.replace('{index}',str(index)) if isinstance(baseAddress,str) else baseAddress
+      for index in self.instanceIndices
+    ] if isArray else [baseAddress]
     self.parameters = []
     for parameterName in parametersDict:
       self.parameters.append(ParameterValueClass(parameterName,parametersDict[parameterName]))
@@ -1272,6 +1299,7 @@ class EnvironmentClass(BaseGeneratorClass):
     template['hvlPkgParamDefs'] = self.hvlPkgParamDefs
     template['subEnvironments'] = self.subEnvironments
     template['hasAddressedSubmodels'] = any(subenv.regModelPkg is not None and subenv.baseAddress is not None for subenv in self.subEnvironments)
+    template['hasArraySubEnvironments'] = any(subenv.isArray for subenv in self.subEnvironments)
     template['subEnvironmentRegPackages'] = self.subEnvironmentRegPackages
     template['qvipSubEnvironments'] = self.qvipSubEnvironments
     template['vipSubEnvironments'] = self.qvipSubEnvironments
@@ -1359,14 +1387,19 @@ class EnvironmentClass(BaseGeneratorClass):
     if (ifPkg not in self.agent_packages):
       self.agent_packages.append(ifPkg)
 
-  def addSubEnv(self,name,envPkg,numAgents,parametersDict={},regModelPkg=None,regBlockClass=None,regBlockInstance='',baseAddress=None):
+  def addSubEnv(self,name,envPkg,numAgents,parametersDict={},regModelPkg=None,regBlockClass=None,regBlockInstance='',baseAddress=None,instanceCount=1,isArray=False):
     if ( regBlockInstance == ''):
-      regBlkInst = name+"_rm"
+      regBlkInst = name+("_{index}_rm" if isArray else "_rm")
     else:
       regBlkInst = regBlockInstance
     """Add a sub environment instantiation to the definition of this environment class"""
-    self.subEnvironments.append(SubEnvironmentClass(name,envPkg,numAgents,self.agentIndex,parametersDict,regModelPkg,regBlockClass,regBlkInst,baseAddress))
-    self.agentIndex = self.agentIndex+numAgents
+    self.subEnvironments.append(
+      SubEnvironmentClass(
+        name,envPkg,numAgents,self.agentIndex,parametersDict,regModelPkg,
+        regBlockClass,regBlkInst,baseAddress,instanceCount,isArray,
+      )
+    )
+    self.agentIndex = self.agentIndex+numAgents*(instanceCount if isArray else 1)
     if (envPkg not in self.sub_env_packages):
       self.sub_env_packages.append(envPkg)
     if (regModelPkg != None and regModelPkg not in self.subEnvironmentRegPackages):
