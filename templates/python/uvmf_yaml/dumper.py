@@ -113,7 +113,11 @@ class EnvironmentDumper:
       params = []
       for p in i.parameters:
         params.append({'name':p.name,'value':p.value})
-      subenv = {'name':i.name,'type':i.envPkg,'parameters':params,'use_register_model':str(i.regModelPkg != None),'reg_block_instance_name':i.regBlockInstance}
+      reg_block_instance_name = i.regBlockInstancePattern if i.isArray else i.regBlockInstance
+      subenv = {'name':i.name,'type':i.envPkg,'parameters':params,'use_register_model':str(i.regModelPkg != None),'reg_block_instance_name':reg_block_instance_name}
+      if i.isArray:
+        subenv['count'] = i.instanceCount
+        subenv['array'] = 'True'
       if i.baseAddress is not None:
         subenv['base_address'] = i.baseAddress
       data['subenvs'].append(subenv)

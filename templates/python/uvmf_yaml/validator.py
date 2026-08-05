@@ -262,6 +262,7 @@ class EnvironmentValidator(BaseValidator):
       Required('name'): str,
       Required('type'): str,
       Optional('count'): int,
+      Optional('array'): Any('True','False'),
       Optional('extdef'): Any('True','False'),
       Optional('parameters'): [ self.parameterUseSchema ],
       Optional('use_register_model'): Any("True","False"),

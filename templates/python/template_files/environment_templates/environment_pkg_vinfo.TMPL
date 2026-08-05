@@ -7,7 +7,11 @@
 @use $UVMF_VIP_LIBRARY_HOME/{{interface_location}}/{{agent}}_pkg/{{agent}}_pkg.vinfo
 {% endfor %}
 {% for sub_env in subEnvironments %}
+{% if sub_env.isArray %}
+@use $UVMF_VIP_LIBRARY_HOME/{{environment_location}}/{{sub_env.envPkg}}_env_pkg/{{sub_env.envPkg}}_env_pkg.vinfo
+{% else %}
 @use $UVMF_VIP_LIBRARY_HOME/{{environment_location}}/{{sub_env.name}}_pkg/{{sub_env.name}}_pkg.vinfo
+{% endif %}
 {% endfor %}
 {% for regModel in regModels %}
 registers/{{regModel.regModelPkg}}.sv

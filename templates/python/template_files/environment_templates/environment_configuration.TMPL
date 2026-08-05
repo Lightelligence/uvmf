@@ -45,7 +45,11 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 
 {% for sub_env in subEnvironments %}
   typedef {{sub_env.envPkg}}_env_configuration{{macro.paramUseNested(sub_env.parameters)|indent(16)}} {{sub_env.name}}_config_t;
+{% if sub_env.isArray %}
+  rand {{sub_env.name}}_config_t {{sub_env.name}}_config[{{sub_env.instanceCount}}];
+{% else %}
   rand {{sub_env.name}}_config_t {{sub_env.name}}_config;
+{% endif %}
 
 {% endfor -%}
 
@@ -56,8 +60,13 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% endfor -%}
 
 {% for sub_env in subEnvironments %}
+{% if sub_env.isArray %}
+    string                {{sub_env.name}}_interface_names[{{sub_env.instanceCount}}][];
+    uvmf_active_passive_t {{sub_env.name}}_interface_activity[{{sub_env.instanceCount}}][];
+{% else %}
     string                {{sub_env.name}}_interface_names[];
     uvmf_active_passive_t {{sub_env.name}}_interface_activity[];
+{% endif %}
 {% endfor -%}
 
 {% for sub_env in qvipSubEnvironments %}
@@ -85,7 +94,13 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
     super.new( name );
 
 {% for sub_env in subEnvironments %}
+{% if sub_env.isArray %}
+{% for index in sub_env.instanceIndices %}
+    {{sub_env.name}}_config[{{index}}] = {{sub_env.name}}_config_t::type_id::create("{{sub_env.instanceNames[index]}}_config");
+{% endfor %}
+{% else %}
     {{sub_env.name}}_config = {{sub_env.name}}_config_t::type_id::create("{{sub_env.name}}_config");
+{% endif %}
 {% endfor -%}
 
 {% for agent in agents %}
@@ -131,6 +146,30 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 
   virtual function string convert2string();
     // pragma uvmf custom convert2string begin
+{% if hasArraySubEnvironments %}
+    string result;
+{% if configVars|length > 0 %}
+    result = $sformatf("{% for config in configVars %}{{config.name}}:0x%x {% endfor -%}"{% for config in configVars %},{{config.name}}{% endfor -%});
+{% else %}
+    result = "";
+{% endif %}
+{% for agent in agents %}
+    result = {result, "\n", {{agent.name}}_config.convert2string()};
+{% endfor -%}
+{% for subEnv in subEnvironments %}
+{% if subEnv.isArray %}
+    foreach ({{subEnv.name}}_config[i]) begin
+      result = {result, $sformatf("\n{{subEnv.name}}[%0d]: ", i), {{subEnv.name}}_config[i].convert2string()};
+    end
+{% else %}
+    result = {result, "\n", {{subEnv.name}}_config.convert2string()};
+{% endif %}
+{% endfor -%}
+{% for sub_env in qvipSubEnvironments %}
+    result = {result, "\n", {{sub_env.name}}_config.convert2string()};
+{% endfor %}
+    return result;
+{% else %}
     return {
      {% if configVars|length > 0 %}$sformatf("{% for config in configVars %}{{config.name}}:0x%x {% endfor -%}"{% for config in configVars %},{{config.name}}{% endfor -%}){% if agents|length > 0 or subEnvironments|length > 0 or qvipSubEnvironments|length > 0 %},{% endif -%}{% endif -%}
 
@@ -151,6 +190,7 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% endfor -%}
 
        };
+{% endif %}
     // pragma uvmf custom convert2string end
   endfunction
 
@@ -172,11 +212,21 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% endif -%}
 {% for sub_env in subEnvironments %}
 {% if sub_env.numAgents > 0 %}
+{% if sub_env.isArray %}
+{% for index in sub_env.instanceIndices %}
+    {{sub_env.name}}_interface_names[{{index}}]    = new[{{sub_env.numAgents}}];
+    {{sub_env.name}}_interface_activity[{{index}}] = new[{{sub_env.numAgents}}];
+
+    {{sub_env.name}}_interface_names[{{index}}]     = interface_names[{{sub_env.agentMinIndices[index]}}:{{sub_env.agentMaxIndices[index]}}];
+    {{sub_env.name}}_interface_activity[{{index}}]  = interface_activity[{{sub_env.agentMinIndices[index]}}:{{sub_env.agentMaxIndices[index]}}];
+{% endfor %}
+{% else %}
     {{sub_env.name}}_interface_names    = new[{{sub_env.numAgents}}];
     {{sub_env.name}}_interface_activity = new[{{sub_env.numAgents}}];
 
     {{sub_env.name}}_interface_names     = interface_names[{{sub_env.agentMinIndex}}:{{sub_env.agentMaxIndex}}];
     {{sub_env.name}}_interface_activity  = interface_activity[{{sub_env.agentMinIndex}}:{{sub_env.agentMaxIndex}}];
+{% endif %}
 {% endif %}
 {% endfor -%}
 
@@ -222,7 +272,13 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% endfor -%}
 
 {% for sub_env in subEnvironments %}
+{% if sub_env.isArray %}
+{% for index in sub_env.instanceIndices %}
+     {{sub_env.name}}_config[{{index}}].initialize( sim_level, {environment_path,".{{sub_env.instanceNames[index]}}"}, {{sub_env.name}}_interface_names[{{index}}], {% if ((sub_env.regModelPkg != None) and (regModels|length > 0)) %}{{regModels[0].regBlockInstance}}.{{sub_env.regBlockArrayName}}[{{index}}]{% else %}null{% endif %},   {{sub_env.name}}_interface_activity[{{index}}]);
+{% endfor %}
+{% else %}
      {{sub_env.name}}_config.initialize( sim_level, {environment_path,".{{sub_env.name}}"}, {{sub_env.name}}_interface_names, {% if ((sub_env.regModelPkg != None) and (regModels|length > 0)) %}{{regModels[0].regBlockInstance}}.{{sub_env.regBlockInstance}}{% else %}null{% endif %},   {{sub_env.name}}_interface_activity);
+{% endif %}
 {% endfor -%}
 
 {% for sub_env in qvipSubEnvironments %}

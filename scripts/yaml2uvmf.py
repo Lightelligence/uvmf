@@ -207,7 +207,7 @@ class DataClass:
   BOOLEAN_KEYS = {
     'elaborate_bfm_parameters','enable_functional_coverage',
     'existing_library_component','extdef','flat_output','gen_inbound_streaming_driver',
-    'iscompare','isrand','use_adapter',
+    'array','iscompare','isrand','use_adapter',
     'use_coemu_clk_rst_gen','use_dpi_link','use_explicit_prediction',
     'use_register_model','veloce_ready','vip_agent',
   }
@@ -387,6 +387,9 @@ class DataClass:
       for category in ('subenvs','vip_subenvs'):
         expanded = []
         for subenv in env.get(category,[]):
+          array_mode = category == 'subenvs' and isinstance(subenv,dict) and subenv.get('array') == 'True'
+          if array_mode and 'count' not in subenv:
+            raise UserError("Array sub-environment \"{0}\" in environment \"{1}\" requires count".format(subenv.get('name',''),env_name))
           if not isinstance(subenv,dict) or 'count' not in subenv:
             expanded.append(subenv)
             continue
@@ -400,6 +403,9 @@ class DataClass:
               raise UserError("Counted sub-environment \"{0}\" in environment \"{1}\" requires {{index}} in reg_block_instance_name".format(subenv['name'],env_name))
           if 'base_address' in subenv and (not isinstance(subenv['base_address'],str) or '{index}' not in subenv['base_address']):
             raise UserError("Counted sub-environment \"{0}\" in environment \"{1}\" requires {{index}} in base_address".format(subenv['name'],env_name))
+          if array_mode:
+            expanded.append(subenv)
+            continue
           for index in range(count):
             instance = copy.deepcopy(subenv)
             del instance['count']
@@ -410,6 +416,22 @@ class DataClass:
             expanded.append(instance)
         if category in env:
           env[category] = expanded
+
+  def expandArraySubenvironmentInstances(self,subenv):
+    """Return the concrete instances represented by an array sub-environment."""
+    if subenv.get('array') != 'True':
+      return [subenv]
+    instances = []
+    for index in range(subenv['count']):
+      instance = copy.deepcopy(subenv)
+      del instance['array']
+      del instance['count']
+      instance['name'] = "{0}_{1}".format(subenv['name'],index)
+      for field in ('reg_block_instance_name','base_address'):
+        if field in instance:
+          instance[field] = instance[field].replace('{index}',str(index))
+      instances.append(instance)
+    return instances
 
   def validateBenchSelectors(self):
     for bench_name,bench in self.data['benches'].items():
@@ -425,9 +447,13 @@ class DataClass:
       instance_names = set()
       for category in ('agents','subenvs','vip_subenvs'):
         for instance in env.get(category,[]):
-          if instance['name'] in instance_names:
-            raise UserError("Duplicate instance name \"{0}\" in environment \"{1}\"".format(instance['name'],env_name))
-          instance_names.add(instance['name'])
+          names = [instance['name']]
+          if category == 'subenvs' and instance.get('array') == 'True':
+            names = ["{0}_{1}".format(instance['name'],index) for index in range(instance['count'])]
+          for instance_name in names:
+            if instance_name in instance_names:
+              raise UserError("Duplicate instance name \"{0}\" in environment \"{1}\"".format(instance_name,env_name))
+            instance_names.add(instance_name)
       for agent in env.get('agents',[]):
         if agent['type'] not in self.data['interfaces']:
           raise UserError("Environment \"{0}\" uses undefined interface type \"{1}\"".format(env_name,agent['type']))
@@ -642,9 +668,10 @@ class DataClass:
       subenv_list = []
       pass
     for s in subenv_list:
-      qstruct = self.getVipAgents(s['type'],recurse_list+[topEnv])
-      agent_list = agent_list + qstruct['alist'];
-      import_list = import_list + qstruct['ilist'];
+      for instance in self.expandArraySubenvironmentInstances(s):
+        qstruct = self.getVipAgents(instance['type'],recurse_list+[topEnv])
+        agent_list = agent_list + qstruct['alist'];
+        import_list = import_list + qstruct['ilist'];
     ## Finally, uniquify the import list
     ilist = import_list
     import_list = []
@@ -749,7 +776,8 @@ class DataClass:
     try:
       subenvs = env['subenvs']
       for e in subenvs:
-        alist = alist + self.getAllAgents(e['type'],e['name'],0,envPath+"."+e['name'])
+        for instance in self.expandArraySubenvironmentInstances(e):
+          alist = alist + self.getAllAgents(instance['type'],instance['name'],0,envPath+"."+instance['name'])
     except KeyError: pass
     try:
       agents = env['agents']
@@ -805,7 +833,8 @@ class DataClass:
     try:
       subenvs = env['subenvs']
       for e in subenvs:
-        sblist = sblist + self.getAllScoreboards(e['type'],e['name'],envPath+"."+e['name'])
+        for instance in self.expandArraySubenvironmentInstances(e):
+          sblist = sblist + self.getAllScoreboards(instance['type'],instance['name'],envPath+"."+instance['name'])
     except KeyError: pass
     try:
       sbs = env['scoreboards']
@@ -828,10 +857,14 @@ class DataClass:
         break
         pass
       for s in subenvs:
-        if s['name'] == p:
-          ret = ret + [s['type']]
-          parent = s['type']
-          break
+        for instance in self.expandArraySubenvironmentInstances(s):
+          if instance['name'] == p:
+            ret = ret + [instance['type']]
+            parent = instance['type']
+            break
+        else:
+          continue
+        break
     return ret
 
   ## Goal is to elaborate the actual parameter values for each agent such that we can automatically
@@ -957,17 +990,19 @@ class DataClass:
       ## Iterate through subenvironments within this environment and log each one, creating
       ## a new child node for each of type 'env', then recursively call buildNodes for each
       for e in self.data['environments'][node.type]['subenvs']:
-        this_node = Node(e['name'],e['type'],node)
-        this_node.info = copy.deepcopy(e)
-        this_node.classification = 'env'
-        node.children.append(this_node)
-        self.resolveDefaultParams(this_node,node)
-        self.buildNodes(this_node)
+        for instance in self.expandArraySubenvironmentInstances(e):
+          this_node = Node(instance['name'],instance['type'],node)
+          this_node.info = copy.deepcopy(instance)
+          this_node.classification = 'env'
+          node.children.append(this_node)
+          self.resolveDefaultParams(this_node,node)
+          self.buildNodes(this_node)
 
   def findInstance(self,instList,inst):
     for i in instList:
-      if i['name'] == inst:
-        return i
+      for instance in self.expandArraySubenvironmentInstances(i):
+        if instance['name'] == inst:
+          return instance
     return None
 
   def elaborateParameter(self,benchName,bfm,parameterName):
@@ -1009,7 +1044,8 @@ class DataClass:
     try:
       subEnvs = env['subenvs']
       for subEnv in subEnvs:
-        structure = structure + self.getAgents(subEnv['type'],recursive=True,givePath=givePath,parentPath=parentPath+[subEnv['name']])
+        for instance in self.expandArraySubenvironmentInstances(subEnv):
+          structure = structure + self.getAgents(instance['type'],recursive=True,givePath=givePath,parentPath=parentPath+[instance['name']])
     except KeyError: pass
     return structure
 
@@ -1165,7 +1201,7 @@ class DataClass:
         try:
           rm_block_instance_name = subenv['reg_block_instance_name']
         except KeyError:
-          rm_block_instance_name = ename+"_rm"
+          rm_block_instance_name = ename+("_{index}_rm" if subenv.get('array') == 'True' else "_rm")
           pass
         try:
           subextdef = ( subenv['extdef'] == 'True' )
@@ -1220,17 +1256,27 @@ class DataClass:
           except KeyError:
             rm_block_class = etype+"_reg_model"
             pass
-        env.addSubEnv(ename,etype,len(agents)+len(vip_agents),eparams,rm_pkg,rm_block_class,rm_block_instance_name,base_address)
+        array_mode = subenv.get('array') == 'True'
+        instance_count = subenv.get('count',1) if array_mode else 1
+        env.addSubEnv(
+          ename,etype,len(agents)+len(vip_agents),eparams,rm_pkg,rm_block_class,
+          rm_block_instance_name,base_address,instance_count,array_mode,
+        )
         env_def = self.data['environments'][etype]
+        instance_names = [ename]
+        if array_mode:
+          instance_names = ["{0}_{1}".format(ename,index) for index in range(instance_count)]
         try:
           env_ap_list = env_def['analysis_ports']
-          for env_ap in env_ap_list:
-            valid_ap_list = valid_ap_list + [ename+"."+env_ap['name']]
+          for instance_name in instance_names:
+            for env_ap in env_ap_list:
+              valid_ap_list = valid_ap_list + [instance_name+"."+env_ap['name']]
         except KeyError: pass
         try:
           env_ae_list = env_def['analysis_exports']
-          for env_ae in env_ae_list:
-            valid_ae_list = valid_ae_list + [ename+"."+env_ae['name']]
+          for instance_name in instance_names:
+            for env_ae in env_ae_list:
+              valid_ae_list = valid_ae_list + [instance_name+"."+env_ae['name']]
         except KeyError: pass
     except KeyError: pass
     ## Locally defined agent instantiations

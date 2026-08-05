@@ -388,6 +388,11 @@ class SocIntegrationTest(unittest.TestCase):
       tests_build = (tb / "tests" / "BUILD").read_text(encoding="utf-8")
       self.assertNotIn("demo_tests",tests_build)
       self.assertIn('name = "base"',tests_build)
+      self.assertIn(
+        'load("@rules_verilog//verilog:defs.bzl", "verilog_dv_library", "verilog_dv_test_cfg")\n\n'
+        "# pragma uvmf custom test_bzl_loads begin",
+        tests_build,
+      )
       self.assertNotIn('"//hw/dv/project_benches/soc/tb/testbench:tb_defines.svh"',tests_build)
       self.assertIn("pragma uvmf custom in_flist_prepend begin",tests_build)
       self.assertIn('"+wdog=": "1000000"',tests_build)
@@ -777,6 +782,164 @@ class SocIntegrationTest(unittest.TestCase):
       for index in range(6):
         self.assertIn("ucie_apb_env_{0}_t ucie_apb_env_{0};".format(index),content)
       self.assertNotIn("ucie_apb_env[",content)
+
+  def test_array_counted_subenvironment_generates_configuration_and_environment_arrays(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config = root / "soc.yaml"
+      output = root / "output"
+      config.write_text(
+        "uvmf:\n"
+        "  interfaces:\n"
+        "    bus:\n"
+        "      clock: clk\n"
+        "      reset: rst\n"
+        "      transaction_vars:\n"
+        "        - {name: data, type: bit, isrand: false, iscompare: true}\n"
+        "  environments:\n"
+        "    svt_apb:\n"
+        "      agents:\n"
+        "        - {name: agent0, type: bus, initiator_responder: INITIATOR}\n"
+        "    soc:\n"
+        "      subenvs:\n"
+        "        - {name: ucie_apb_env, type: svt_apb, count: 3, array: true}\n",
+        encoding="utf-8",
+      )
+      result = self.run_generator(config,output,"-g","environment:soc")
+      self.assertEqual(result.returncode,0,result.stderr)
+      package = output / "verification_ip" / "environment_packages" / "soc_env_pkg"
+      configuration = (package / "src" / "soc_env_configuration.sv").read_text(encoding="utf-8")
+      environment = (package / "src" / "soc_environment.sv").read_text(encoding="utf-8")
+      self.assertIn(
+        "rand ucie_apb_env_config_t ucie_apb_env_config[3];",
+        configuration,
+      )
+      self.assertIn(
+        "string                ucie_apb_env_interface_names[3][];",
+        configuration,
+      )
+      self.assertIn(
+        'ucie_apb_env_config[2] = ucie_apb_env_config_t::type_id::create("ucie_apb_env_2_config");',
+        configuration,
+      )
+      self.assertIn("ucie_apb_env_interface_names[2]",configuration)
+      self.assertIn("interface_names[2:2];",configuration)
+      self.assertIn(
+        'ucie_apb_env_config[2].initialize( sim_level, {environment_path,".ucie_apb_env_2"}',
+        configuration,
+      )
+      self.assertIn(
+        "ucie_apb_env_t ucie_apb_env[3];",
+        environment,
+      )
+      self.assertIn(
+        'ucie_apb_env[2] = ucie_apb_env_t::type_id::create("ucie_apb_env_2", this);',
+        environment,
+      )
+      self.assertIn(
+        "ucie_apb_env[2].set_config(configuration.ucie_apb_env_config[2]);",
+        environment,
+      )
+      self.assertNotIn("rand ucie_apb_env_0_config_t ucie_apb_env_0_config;",configuration)
+      self.assertNotIn("ucie_apb_env_t ucie_apb_env_0;",environment)
+
+  def test_array_counted_subenvironment_generates_register_model_arrays(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      config = Path(tmp) / "soc.yaml"
+      config.write_text(
+        "uvmf:\n"
+        "  environments:\n"
+        "    ip:\n"
+        "      register_model:\n"
+        "        reg_model_package: ip_reg_pkg\n"
+        "        reg_block_class: ip_reg_block\n"
+        "    soc:\n"
+        "      subenvs:\n"
+        "        - name: ip\n"
+        "          type: ip\n"
+        "          count: 2\n"
+        "          array: true\n"
+        "          use_register_model: true\n"
+        "          reg_block_instance_name: ip_{index}_rm\n"
+        "          base_address: BASE_ADDR + {index} * IP_STRIDE\n"
+        "      register_model:\n"
+        "        use_adapter: false\n"
+        "        use_explicit_prediction: false\n",
+        encoding="utf-8",
+      )
+      output = Path(tmp) / "output"
+      result = self.run_generator(config,output,"-g","environment:soc")
+      self.assertEqual(result.returncode,0,result.stderr)
+      model = output / "verification_ip" / "environment_packages" / "soc_env_pkg" / "registers" / "soc_reg_model.sv"
+      content = model.read_text(encoding="utf-8")
+      self.assertIn("ip_rm[2];",content)
+      self.assertIn('ip_rm[0] = ip_reg_block::type_id::create("ip_0_rm");',content)
+      self.assertIn('ip_rm[1] = ip_reg_block::type_id::create("ip_1_rm");',content)
+      self.assertIn("default_map.add_submap(ip_rm[0].default_map, BASE_ADDR + 0 * IP_STRIDE);",content)
+      self.assertIn("default_map.add_submap(ip_rm[1].default_map, BASE_ADDR + 1 * IP_STRIDE);",content)
+
+  def test_array_counted_subenvironment_expands_bench_bfms(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config = root / "soc.yaml"
+      output = root / "output"
+      config.write_text(
+        "uvmf:\n"
+        "  interfaces:\n"
+        "    bus:\n"
+        "      clock: clk\n"
+        "      reset: rst\n"
+        "  environments:\n"
+        "    ip:\n"
+        "      agents:\n"
+        "        - {name: agent0, type: bus}\n"
+        "    soc:\n"
+        "      subenvs:\n"
+        "        - {name: ip, type: ip, count: 3, array: true}\n"
+        "  benches:\n"
+        "    soc:\n"
+        "      top_env: soc\n",
+        encoding="utf-8",
+      )
+      result = self.run_generator(config,output,"-g","bench:soc")
+      self.assertEqual(result.returncode,0,result.stderr)
+      hdl_top = output / "project_benches" / "soc" / "tb" / "testbench" / "hdl_top.sv"
+      content = hdl_top.read_text(encoding="utf-8")
+      for index in range(3):
+        self.assertIn("ip_{0}_agent0_bus(".format(index),content)
+        self.assertIn("ip_{0}_agent0_mon_bfm(".format(index),content)
+      self.assertNotIn("ip_agent0_bus(",content)
+
+  def test_array_counted_subenvironment_merge_preserves_custom_configuration(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config = root / "soc.yaml"
+      output = root / "output"
+      config.write_text(
+        "uvmf:\n"
+        "  environments:\n"
+        "    ip: {}\n"
+        "    soc:\n"
+        "      subenvs:\n"
+        "        - {name: ip, type: ip, count: 2, array: true}\n",
+        encoding="utf-8",
+      )
+      first = self.run_generator(config,output,"-g","environment:soc")
+      self.assertEqual(first.returncode,0,first.stderr)
+      configuration = output / "verification_ip" / "environment_packages" / "soc_env_pkg" / "src" / "soc_env_configuration.sv"
+      configuration.write_text(
+        configuration.read_text(encoding="utf-8").replace(
+          "  // pragma uvmf custom class_item_additional end",
+          "  bit user_configuration_member;\n"
+          "  // pragma uvmf custom class_item_additional end",
+        ),
+        encoding="utf-8",
+      )
+      merged = self.run_generator(
+        config,output,"-g","environment:soc","--merge_source="+str(output)
+      )
+      self.assertEqual(merged.returncode,0,merged.stderr)
+      self.assertIn("bit user_configuration_member;",configuration.read_text(encoding="utf-8"))
 
   def test_counted_subenvironment_rejects_shared_register_block_name(self):
     with tempfile.TemporaryDirectory() as tmp:
