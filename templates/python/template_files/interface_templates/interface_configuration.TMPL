@@ -12,6 +12,9 @@
 {% endblock %}
 
 {% block contents %}
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class {{name}}_configuration {{macro.paramDeclare(paramDefs)|indent(6)}} extends uvmf_parameterized_agent_configuration_base #(
       .DRIVER_BFM_BIND_T({% if useDpiLink %}{{name}}_driver_proxy {% else %}virtual {{name}}_driver_bfm {% endif %}{{macro.paramUse(paramDefs)|indent(26)}}),
       .MONITOR_BFM_BIND_T({% if useDpiLink %} {{name}}_monitor_proxy {% else %} virtual {{name}}_monitor_bfm {% endif %}{{macro.paramUse(paramDefs)|indent(26)}}));

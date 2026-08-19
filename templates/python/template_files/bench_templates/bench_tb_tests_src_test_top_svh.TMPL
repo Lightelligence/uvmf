@@ -23,6 +23,9 @@ typedef {{env_name}}_env_sequence_base #(
   .ENV_T   ({{env_name}}_environment_t)
 ) {{env_name}}_env_sequence_base_t;
 
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class test_top extends uvmf_test_base #(
   .CONFIG_T       ({{env_name}}_env_configuration_t),
   .ENV_T          ({{env_name}}_environment_t),

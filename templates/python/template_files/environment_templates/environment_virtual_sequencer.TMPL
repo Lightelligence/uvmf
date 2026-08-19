@@ -12,6 +12,9 @@
 {% endblock %}
 
 {% block contents %}
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class {{name}}_virtual_sequencer #(
   type CONFIG_T{% for param in paramDefs %},
   {{param.type}} {{param.name}}{% if param.value != None %} = {{param.value}}{% endif %}{% endfor %}{{ "\n" -}}

@@ -251,6 +251,81 @@ class SocIntegrationTest(unittest.TestCase):
         configuration,
       )
 
+  def test_configuration_initialize_custom_block_is_inside_function(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config = root / "soc.yaml"
+      output = root / "output"
+      config.write_text(BASE_YAML,encoding="utf-8")
+      result = self.run_generator(config,output,"-g","environment:ip")
+      self.assertEqual(result.returncode,0,result.stderr)
+      configuration = (
+        output / "verification_ip" / "environment_packages" /
+        "ip_env_pkg" / "src" / "ip_env_configuration.sv"
+      ).read_text(encoding="utf-8")
+      description_begin = configuration.index("// pragma uvmf custom description begin")
+      description_end = configuration.index("// pragma uvmf custom description end",description_begin)
+      class_start = configuration.index("class ip_env_configuration")
+      function_start = configuration.index("function void initialize(")
+      super_call = configuration.index("super.initialize(",function_start)
+      custom_begin = configuration.index("// pragma uvmf custom initialize begin",function_start)
+      custom_end = configuration.index("// pragma uvmf custom initialize end",custom_begin)
+      function_end = configuration.index("endfunction",function_start)
+      self.assertLess(description_begin,class_start)
+      self.assertLess(description_end,class_start)
+      self.assertGreater(custom_begin,super_call)
+      self.assertLess(custom_end,function_end)
+      self.assertEqual(configuration.count("// pragma uvmf custom initialize begin"),1)
+
+  def test_every_class_template_has_a_description_custom_block(self):
+    template_root = REPO_ROOT / "templates" / "python" / "template_files"
+    description_begin = "// pragma uvmf custom description begin"
+    description_end = "// pragma uvmf custom description end"
+    for directory in (
+      template_root / "interface_templates",
+      template_root / "environment_templates",
+      template_root / "bench_templates",
+    ):
+      for template in directory.glob("*.TMPL"):
+        content = template.read_text(encoding="utf-8")
+        class_lines = [
+          line for line in content.splitlines()
+          if line.startswith("class ") and not line.startswith("class uvm_tlm_")
+        ]
+        if not class_lines:
+          continue
+        self.assertEqual(content.count(description_begin),1,str(template))
+        self.assertEqual(content.count(description_end),1,str(template))
+        class_start = content.index(class_lines[0])
+        marker_start = content.index(description_begin)
+        marker_end = content.index(description_end,marker_start)
+        self.assertLess(marker_start,class_start,str(template))
+        self.assertLess(marker_end,class_start,str(template))
+
+  def test_environment_generates_end_of_elaboration_phase_hook(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config = root / "soc.yaml"
+      output = root / "output"
+      config.write_text(BASE_YAML,encoding="utf-8")
+      result = self.run_generator(config,output,"-g","environment:ip")
+      self.assertEqual(result.returncode,0,result.stderr)
+      environment = (
+        output / "verification_ip" / "environment_packages" /
+        "ip_env_pkg" / "src" / "ip_environment.sv"
+      ).read_text(encoding="utf-8")
+      end_start = environment.index("function void end_of_elaboration_phase(uvm_phase phase);")
+      super_call = environment.index("super.end_of_elaboration_phase(phase);",end_start)
+      end_custom_begin = environment.index("// pragma uvmf custom end_of_elaboration_phase begin",end_start)
+      end_custom_end = environment.index("// pragma uvmf custom end_of_elaboration_phase end",end_custom_begin)
+      end_function = environment.index("endfunction",end_start)
+      start_phase = environment.index("function void start_of_simulation_phase(uvm_phase phase);")
+      self.assertLess(end_start,super_call)
+      self.assertLess(super_call,end_custom_begin)
+      self.assertLess(end_custom_begin,end_custom_end)
+      self.assertLess(end_custom_end,end_function)
+      self.assertLess(end_function,start_phase)
+
   def test_environment_generates_minimal_bazel_build(self):
     with tempfile.TemporaryDirectory() as tmp:
       root = Path(tmp)

@@ -12,6 +12,9 @@
 {% endblock %}
 
 {% block contents %}
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDeclare(paramDefs)|indent(13)}}{% endif %} extends uvmf_environment_configuration_base;
 
 {{macro.objUtils([ name,'_env_configuration']|join(""),paramDefs)}}
@@ -208,6 +211,9 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 
     super.initialize(sim_level, environment_path, interface_names, register_model, interface_activity);
 
+    // pragma uvmf custom initialize begin
+    // pragma uvmf custom initialize end
+
 {% if subEnvironments|length > 0 %}  // Interface initialization for sub-environments
 {% endif -%}
 {% for sub_env in subEnvironments %}
@@ -290,9 +296,6 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% endfor %}
 
   endfunction
-
-  // pragma uvmf custom initialize begin
-  // pragma uvmf custom initialize end
 
 endclass
 

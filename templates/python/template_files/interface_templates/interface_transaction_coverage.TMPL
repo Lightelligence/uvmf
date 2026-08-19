@@ -13,6 +13,9 @@
 {% endblock %}
 
 {% block contents %}
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class {{name}}_transaction_coverage {{macro.paramDeclare(paramDefs)|indent(6)}} extends uvm_subscriber #(.T({{name}}_transaction {{macro.paramUse(paramDefs)|indent(44)}}));
 
 {{macro.compUtils([name,'_transaction_coverage']|join(""),paramDefs)}}

@@ -14,6 +14,9 @@
 {% endblock %}
 
 {% block contents %}
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class {{name}}_driver  {{macro.paramDeclare(paramDefs)|indent(6)}} extends uvmf_driver_base #(
                    .CONFIG_T({{name}}_configuration  {{macro.paramUse(paramDefs)|indent(29)}} ),
                    .BFM_BIND_T({% if useDpiLink %}{{name}}_driver_proxy {% else %}virtual {{name}}_driver_bfm {% endif %} {{macro.paramUse(paramDefs)|indent(29)}} ),
