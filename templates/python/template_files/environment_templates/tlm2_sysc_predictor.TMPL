@@ -144,6 +144,9 @@ endclass
 {% endfor %}
 // ===========================================================================
 
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class {{name}} {{macro.paramDeclare(parameters)|indent(2)}} extends uvm_component;
 
   // Factory registration of this class

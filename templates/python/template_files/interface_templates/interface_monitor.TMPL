@@ -15,6 +15,9 @@
 {% endblock %}
 
 {% block contents %}
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class {{name}}_monitor {{macro.paramDeclare(paramDefs)|indent(6)}} extends uvmf_monitor_base #(
                     .CONFIG_T({{name}}_configuration  {{macro.paramUse(paramDefs)|indent(29)}}),
                     .BFM_BIND_T({%if useDpiLink %}{{name}}_monitor_proxy {% else %}virtual {{name}}_monitor_bfm {% endif %} {{macro.paramUse(paramDefs)|indent(29)}}),

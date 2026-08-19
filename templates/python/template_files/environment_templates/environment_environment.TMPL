@@ -12,6 +12,9 @@
 
 {% block contents %}
 
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(paramDefs)|indent(2)}}{% endif %} extends uvmf_environment_base #(
   .CONFIG_T({{name}}_env_configuration{{macro.paramUse(paramDefs)|indent(12)}})
 );
@@ -276,7 +279,18 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
   endfunction
 
   // ****************************************************************************
-  // FUNCTION: end_of_simulation_phase()
+  // FUNCTION: end_of_elaboration_phase()
+  // This function is executed after the environment hierarchy has been
+  // elaborated and before simulation starts.
+
+  virtual function void end_of_elaboration_phase(uvm_phase phase);
+    super.end_of_elaboration_phase(phase);
+    // pragma uvmf custom end_of_elaboration_phase begin
+    // pragma uvmf custom end_of_elaboration_phase end
+  endfunction
+
+  // ****************************************************************************
+  // FUNCTION: start_of_simulation_phase()
   // This function is executed just prior to executing run_phase.  This function
   // was added to the environment to sample environment configuration settings
   // just before the simulation exits time 0.  The configuration structure is

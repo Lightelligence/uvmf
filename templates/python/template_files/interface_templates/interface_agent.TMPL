@@ -10,6 +10,9 @@
 {% endblock %}
 
 {% block contents %}
+// pragma uvmf custom description begin
+// pragma uvmf custom description end
+
 class {{name}}_agent {{macro.paramDeclare(paramDefs)|indent(5)}} extends uvmf_parameterized_agent #(
                     .CONFIG_T({{name}}_configuration {{macro.paramUse(paramDefs)|indent(30)}}),
                     .DRIVER_T({{name}}_driver {{macro.paramUse(paramDefs)|indent(30)}}),
