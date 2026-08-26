@@ -353,7 +353,7 @@ class InterfaceDumper:
 import yaml
 
 BOOLEAN_KEYS = {
-  'elaborate_bfm_parameters','enable_functional_coverage',
+  'array','elaborate_bfm_parameters','enable_functional_coverage',
   'existing_library_component','extdef','flat_output','gen_inbound_streaming_driver',
   'iscompare','isrand','use_adapter',
   'use_coemu_clk_rst_gen','use_dpi_link','use_explicit_prediction',
