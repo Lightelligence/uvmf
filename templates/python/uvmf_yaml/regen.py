@@ -7,6 +7,7 @@ import stat
 import tempfile
 from uvmf_yaml import RegenValidator
 from uvmf_yaml.unmarked import migrate_unmarked
+from uvmf_yaml.custom_bazel import BAZEL_BEGIN, BAZEL_END, BAZEL_BLOCK, bazel_custom_content, is_bazel_file
 
 from voluptuous import MultipleInvalid
 from voluptuous.humanize import humanize_error
@@ -53,6 +54,7 @@ class Merge(Base):
     self.tmp_fname = None
     self.migrate_unmarked = migrate_unmarked
     self.migrated_blocks = {}
+    self.preserved_bazel_files = []
 
   def assert_path_within(self,root,path,description):
     candidate = os.path.realpath(os.path.abspath(os.path.normpath(path)))
@@ -177,6 +179,18 @@ class Merge(Base):
       raise UserError("Internal error - Source file {0} was not properly parsed for named blocks".format(self.old_fname))
     else:
       ## Matched old_fname up with something in the data structure, which means we have a match between old and new.
+      if is_bazel_file(new_fname):
+        with open(new_fname,'r',encoding='utf-8') as handle:
+          new_text = handle.read()
+        if new_text.startswith(BAZEL_BEGIN) and new_text.endswith(BAZEL_END):
+          with open(self.old_fname,'r',encoding='utf-8') as handle:
+            old_text = handle.read()
+          # Whole-file ownership supersedes every legacy sub-block. Preserve
+          # all original content, not just the formerly marked customization.
+          self.rd[self.old_fname] = {
+            BAZEL_BLOCK: {'content': bazel_custom_content(old_text)},
+          }
+          self.preserved_bazel_files.append(self.old_fname)
       if self.migrate_unmarked and new_fname.endswith(('.sv','.svh')):
         with open(self.old_fname,'r',encoding='utf-8') as handle:
           old_text = handle.read()

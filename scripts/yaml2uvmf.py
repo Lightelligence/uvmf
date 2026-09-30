@@ -83,6 +83,8 @@ def merge_summary(merge,verbose=False):
       for l in merge.found_blocks[f]:
         print("      \"{0}\"".format(l['name']))
   print("  Copied {0} new files from generated source".format(len(merge.copied_files)))
+  if merge.preserved_bazel_files:
+    print("  Preserved {0} complete user-owned Bazel files".format(len(merge.preserved_bazel_files)))
   if verbose and (len(merge.copied_files)>0):
     print("    Files found in new output but not in merged source. List of copied file destinations:")
     for f in merge.copied_files:

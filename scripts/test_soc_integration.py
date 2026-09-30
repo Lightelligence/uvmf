@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 from pathlib import Path
+import ast
 import re
 import subprocess
 import sys
@@ -83,6 +84,15 @@ class SocIntegrationTest(unittest.TestCase):
     command.extend(args)
     command.append(str(yaml_file))
     return subprocess.run(command,text=True,capture_output=True,check=False)
+
+  def assert_full_bazel_custom_block(self,text):
+    lines = text.splitlines()
+    self.assertEqual(lines[0],"# pragma uvmf custom bazel_file begin")
+    self.assertEqual(lines[-1],"# pragma uvmf custom bazel_file end")
+    self.assertEqual(sum("pragma uvmf custom" in line for line in lines),2)
+    # These generated Starlark defaults use syntax shared with Python. This is
+    # a structure check only, not Bazel evaluation or a licensed build.
+    ast.parse(text)
 
   def test_duplicate_component_definition_reports_both_files(self):
     with tempfile.TemporaryDirectory() as tmp:
@@ -355,7 +365,8 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertNotIn('"registers/',in_flist)
       self.assertNotIn('"src/*_intf.sv"',in_flist)
       self.assertIn('glob([\n        "*_pkg.sv",',in_flist)
-      self.assertIn("pragma uvmf custom in_flist_prepend begin",in_flist)
+      self.assert_full_bazel_custom_block(ip_build_content)
+      self.assert_full_bazel_custom_block(bus_build_content)
       self.assertEqual(ip_build_content.count('"@dv_common//cmn:pkg"'),1)
       for dependency in (
         '"@uvmf//uvmf_base_pkg:pkg"',
@@ -370,7 +381,7 @@ class SocIntegrationTest(unittest.TestCase):
       )
       soc_build_content = soc_build.read_text(encoding="utf-8")
       self.assertIn('"registers/*.sv*"',soc_build_content)
-      self.assertIn("pragma uvmf custom deps_additional begin",soc_build_content)
+      self.assert_full_bazel_custom_block(soc_build_content)
       self.assertEqual(soc_build_content.count('"@uvmf//uvmf_base_pkg:pkg"'),1)
       self.assertEqual(soc_build_content.count('"@dv_common//cmn:pkg"'),1)
       self.assertEqual(soc_build_content.count('"@cluelib_pkg//:pkg"'),1)
@@ -438,9 +449,9 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertNotIn("coverage.ccf",tb_build)
       self.assertNotIn("soc_tb_cfg.sv",tb_build)
       self.assertIn('simulator = "VCS"',tb_build)
-      self.assertIn("pragma uvmf custom tb_attributes begin",tb_build)
-      self.assertIn("pragma uvmf custom additional_tbs begin",tb_build)
+      self.assert_full_bazel_custom_block(tb_build)
       self.assertIn('name = "pkg"',(tb / "parameters" / "BUILD").read_text(encoding="utf-8"))
+      self.assert_full_bazel_custom_block((tb / "parameters" / "BUILD").read_text(encoding="utf-8"))
       testbench_build = (tb / "testbench" / "BUILD").read_text(encoding="utf-8")
       self.assertIn('exports_files(glob(["*.svh"]))',testbench_build)
       self.assertNotIn('"hdl_interconnect_macros.sv"',testbench_build)
@@ -450,30 +461,16 @@ class SocIntegrationTest(unittest.TestCase):
         '"//hw/dv/verification_ip/environment_packages/soc_env_pkg:pkg"',
         testbench_build,
       )
-      self.assertLess(
-        testbench_build.index('"@uvmf//uvmf_base_pkg:pkg"'),
-        testbench_build.index("pragma uvmf custom deps_additional begin"),
-      )
-      self.assertLess(
-        testbench_build.index("pragma uvmf custom deps_additional end"),
-        testbench_build.index('"//hw/dv/project_benches/soc/tb/parameters:pkg"'),
-      )
+      self.assert_full_bazel_custom_block(testbench_build)
       self.assertIn('"//hw/dv/project_benches/soc/tb/tests"',testbench_build)
       self.assertNotIn('"//hw/dv/project_benches/soc/tb/tests:tests"',testbench_build)
       tests_build = (tb / "tests" / "BUILD").read_text(encoding="utf-8")
       self.assertNotIn("demo_tests",tests_build)
       self.assertIn('name = "base"',tests_build)
-      self.assertIn(
-        'load("@rules_verilog//verilog:defs.bzl", "verilog_dv_library", "verilog_dv_test_cfg")\n\n'
-        "# pragma uvmf custom test_bzl_loads begin",
-        tests_build,
-      )
+      self.assertIn('load("@rules_verilog//verilog:defs.bzl", "verilog_dv_library", "verilog_dv_test_cfg")',tests_build)
       self.assertNotIn('"//hw/dv/project_benches/soc/tb/testbench:tb_defines.svh"',tests_build)
-      self.assertIn("pragma uvmf custom in_flist_prepend begin",tests_build)
       self.assertIn('"+wdog=": "1000000"',tests_build)
-      self.assertIn("pragma uvmf custom test_bzl_loads begin",tests_build)
-      self.assertIn("pragma uvmf custom sim_opts begin",tests_build)
-      self.assertIn("pragma uvmf custom additional_test_cfgs begin",tests_build)
+      self.assert_full_bazel_custom_block(tests_build)
       self.assertEqual(
         tests_build.count('"//hw/dv/project_benches/soc/tb/parameters:pkg"'),
         1,
@@ -481,10 +478,6 @@ class SocIntegrationTest(unittest.TestCase):
       tests_deps = tests_build.split("deps = [",1)[1].split("    ],",1)[0]
       self.assertNotIn('"@uvmf//uvmf_base_pkg:pkg"',tests_deps)
       self.assertNotIn("verification_ip/environment_packages",tests_deps)
-      self.assertLess(
-        tests_deps.index('"//hw/dv/project_benches/soc/tb/parameters:pkg"'),
-        tests_deps.index("pragma uvmf custom deps_additional begin"),
-      )
       self.assertIn('tb = "//hw/dv/project_benches/soc/tb:soc_tb"',tests_build)
       self.assertFalse((tb / "tests" / "demo_tests.bzl").exists())
       tests_pkg = (tb / "tests" / "soc_tests_pkg.sv").read_text(encoding="utf-8")
@@ -639,39 +632,29 @@ class SocIntegrationTest(unittest.TestCase):
 
       build = output / "project_benches" / "soc" / "tb" / "BUILD"
       content = build.read_text(encoding="utf-8").replace(
-        "    # pragma uvmf custom tb_deps end",
-        '    "//hw/dv/custom:pkg",\n'
-        "    # pragma uvmf custom tb_deps end",
+        "tb_deps = [\n",
+        'tb_deps = [\n    "//hw/dv/custom:pkg",\n',
       )
       build.write_text("# outside custom block\n"+content,encoding="utf-8")
       tests_build = output / "project_benches" / "soc" / "tb" / "tests" / "BUILD"
       content = tests_build.read_text(encoding="utf-8")
       content = content.replace(
-        "# pragma uvmf custom test_bzl_loads end",
-        'load(":custom_tests.bzl", "custom_test_configs")\n'
-        "# pragma uvmf custom test_bzl_loads end",
+        "package(default_visibility",
+        'load(":custom_tests.bzl", "custom_test_configs")\n\npackage(default_visibility',
       ).replace(
-        "        # pragma uvmf custom sim_opts end",
-        '        "+custom=": "1",\n'
-        "        # pragma uvmf custom sim_opts end",
+        "    sim_opts = {\n",
+        '    sim_opts = {\n        "+custom=": "1",\n',
       ).replace(
-        "# pragma uvmf custom additional_test_cfgs end",
-        'verilog_dv_test_cfg(name = "custom", inherits = [":base"])\n'
-        "# pragma uvmf custom additional_test_cfgs end",
-      ).replace(
-        "# pragma uvmf custom test_configs end",
-        "custom_test_configs()\n"
-        "# pragma uvmf custom test_configs end",
+        "# pragma uvmf custom bazel_file end",
+        'verilog_dv_test_cfg(name = "custom", inherits = [":base"])\ncustom_test_configs()\n# pragma uvmf custom bazel_file end',
       )
       tests_build.write_text(content,encoding="utf-8")
       content = build.read_text(encoding="utf-8").replace(
-        "    # pragma uvmf custom tb_attributes end",
-        '    tags = ["custom"],\n'
-        "    # pragma uvmf custom tb_attributes end",
+        '    simulator = "VCS",',
+        '    tags = ["custom"],\n    simulator = "VCS",',
       ).replace(
-        "# pragma uvmf custom additional_tbs end",
-        'verilog_dv_tb(name = "extra_tb", deps = top_deps)\n'
-        "# pragma uvmf custom additional_tbs end",
+        "# pragma uvmf custom bazel_file end",
+        'verilog_dv_tb(name = "extra_tb", deps = top_deps)\n# pragma uvmf custom bazel_file end',
       )
       build.write_text(content,encoding="utf-8")
       project_file = output / "project_benches" / "soc" / "tb" / "user_owned.sv"
@@ -691,6 +674,8 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertIn("//hw/dv/custom:pkg",build.read_text(encoding="utf-8"))
       self.assertIn('tags = ["custom"]',build.read_text(encoding="utf-8"))
       self.assertIn('name = "extra_tb"',build.read_text(encoding="utf-8"))
+      self.assertIn("# outside custom block",build.read_text(encoding="utf-8"))
+      self.assert_full_bazel_custom_block(build.read_text(encoding="utf-8"))
       self.assertIn('load(":custom_tests.bzl", "custom_test_configs")',tests_build.read_text(encoding="utf-8"))
       self.assertIn('"+custom=": "1"',tests_build.read_text(encoding="utf-8"))
       self.assertIn('name = "custom"',tests_build.read_text(encoding="utf-8"))
@@ -735,6 +720,31 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertEqual(merged.returncode,0,merged.stderr)
       for path,content in original_contents.items():
         self.assertEqual(path.read_bytes(),content,path)
+
+  def test_user_owned_bazel_content_survives_simulator_profile_changes(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config,output = root / "soc.yaml",root / "output"
+      config.write_text(BASE_YAML,encoding="utf-8")
+      first = self.run_generator(config,output)
+      self.assertEqual(first.returncode,0,first.stderr)
+      originals = {}
+      for path in output.rglob("BUILD"):
+        text = path.read_text(encoding="utf-8")
+        text = text.replace('package(default_visibility = ["//visibility:public"])','package(default_visibility = ["//custom:__subpackages__"])')
+        text = text.replace("# pragma uvmf custom bazel_file end",'exports_files(["user_owned.txt"])\n# pragma uvmf custom bazel_file end')
+        path.write_text(text,encoding="utf-8")
+        originals[path] = path.read_bytes()
+      for attempt in range(2):
+        result = self.run_generator(config,output,"--simulator","xcelium","--merge_source",str(output))
+        self.assertEqual(result.returncode,0,result.stderr)
+        for path,content in originals.items():
+          self.assertEqual(path.read_bytes(),content,path)
+      tb = output / "project_benches" / "soc" / "tb" / "BUILD"
+      self.assertIn('simulator = "VCS"',tb.read_text(encoding="utf-8"))
+      interface = output / "verification_ip" / "interface_packages" / "bus_pkg" / "BUILD"
+      self.assertIn('"@vip_vcs_svt_pkg//:pkg"',interface.read_text(encoding="utf-8"))
+      self.assertNotIn('"@vip_xcelium_svt_pkg//:pkg"',interface.read_text(encoding="utf-8"))
 
   def test_merge_preserves_exported_tb_defines_used_by_environment_build(self):
     with tempfile.TemporaryDirectory() as tmp:
@@ -783,9 +793,8 @@ class SocIntegrationTest(unittest.TestCase):
       env_build = output / "verification_ip" / "environment_packages" / "soc_env_pkg" / "BUILD"
       env_build.write_text(
         env_build.read_text(encoding="utf-8").replace(
-          "        # pragma uvmf custom in_flist_prepend end",
-          '        "//hw/dv/project_benches/soc/tb/testbench:tb_defines.svh",\n'
-          "        # pragma uvmf custom in_flist_prepend end",
+          "    in_flist = [\n",
+          '    in_flist = [\n        "//hw/dv/project_benches/soc/tb/testbench:tb_defines.svh",\n',
         ),
         encoding="utf-8",
       )

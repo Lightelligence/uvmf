@@ -330,6 +330,12 @@ class BaseGeneratorClass(BaseElementClass):
 
   def normalizeGeneratedSource(self,fname,content):
     """Apply low-risk lint cleanup to generated SV/Verilog source files."""
+    from uvmf_yaml.custom_bazel import is_bazel_file, wrap_bazel_file
+    if is_bazel_file(fname):
+      # Interface templates inherit a Verilog-style header. Bazel comments
+      # use '#'; convert comment lines only, never labels containing '//'.
+      content = re.sub(r'^([ \t]*)//',r'\1#',content,flags=re.MULTILINE)
+      return wrap_bazel_file(content)
     if not fname.lower().endswith(('.sv','.svh','.v','.vh','.svp','.vp')):
       return content
     content = self.rewriteGeneratedSvhReferences(content)

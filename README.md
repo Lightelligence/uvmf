@@ -117,19 +117,22 @@ IP register block.
 Project-specific macros and constants are expected to be hand-maintained in
 project files such as `tb/testbench/tb_defines.svh`, not generated from YAML.
 The generated `tb/testbench/BUILD` exports `*.svh`, so an environment BUILD can
-pull the macro file into its file list through the preserved custom block:
+pull the macro file into its file list. The entire BUILD is user-owned:
 
 ```python
-in_flist = [
-    # pragma uvmf custom in_flist_prepend begin
-    "//hw/dv/project_benches/sys/tb/testbench:tb_defines.svh",
-    # pragma uvmf custom in_flist_prepend end
-    "src/sys_env_typedefs.svh",
-] + glob([
-    "*_pkg.sv",
-]) + glob([
-    "src/*_intf.sv",
-])
+# pragma uvmf custom bazel_file begin
+load("@rules_verilog//verilog:defs.bzl", "verilog_dv_library")
+
+package(default_visibility = ["//visibility:public"])
+
+verilog_dv_library(
+    name = "pkg",
+    srcs = glob(["*.sv*", "src/**/*.sv*"]),
+    in_flist = [
+        "//hw/dv/project_benches/sys/tb/testbench:tb_defines.svh",
+    ] + glob(["*_pkg.sv", "src/*_intf.sv"]),
+)
+# pragma uvmf custom bazel_file end
 ```
 
 Keep `tb/parameters` available for existing bench-local package code, but do
@@ -150,14 +153,24 @@ generator ownership.
 
 Bazel `BUILD` files under useful environment and bench directories contain
 minimal `verilog_dv_library`, `verilog_dv_tb`, and `verilog_dv_test_cfg`
-targets. Project RTL, VIP, simulator options, waivers, and test configurations
-belong in the provided `pragma uvmf custom` blocks so merge preserves them.
+targets. Every generated Bazel file is enclosed in a single `bazel_file`
+custom block, including its loads, package declaration, targets and options.
+There are no nested custom markers. Defaults are provided on first generation;
+subsequent `--merge_source` runs preserve the whole existing file. When upgrading
+an older BUILD with smaller custom blocks, merge preserves all code and comments
+(even outside those blocks) and removes only the old marker lines automatically.
+No extra command-line option is needed for this Bazel upgrade.
+
+Users maintain the entire Bazel definition, including RTL/VIP dependencies,
+simulator options, waivers and test configurations. YAML dependency or simulator
+profile changes do not refresh existing Bazel content during merge; update it
+manually or generate fresh defaults in a separate directory for comparison.
 The `--check` and `--clean` paths do not modify these files.
 
 Direct `-o/--overwrite` generation is rejected when the destination is not
 empty. Upgrade an existing generated tree with `--merge_source=<existing-dv-dir>`;
 the merge creates a complete backup before changing files and preserves all
-`pragma uvmf custom` blocks. Hand edits outside those blocks remain in the
+`pragma uvmf custom` blocks. For non-Bazel generated files, hand edits outside those blocks remain in the
 backup and must be reviewed and ported manually because they cannot be
 distinguished safely from obsolete generated code.
 
@@ -182,7 +195,7 @@ This preserves:
   written `tb/testbench/*.svh` files;
 - a complete `<existing-dv-dir>_bak_N` copy before any update.
 
-It cannot automatically preserve arbitrary edits made in generated-file regions
+Outside the file-wide Bazel behavior described above, it cannot automatically preserve arbitrary edits made in generated-file regions
 outside `pragma uvmf custom` blocks. Review the backup for those edits and move
 them into a custom block or a project-owned include file before relying on future
 regeneration.
