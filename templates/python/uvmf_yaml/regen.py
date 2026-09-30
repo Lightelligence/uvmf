@@ -6,6 +6,7 @@ import shutil
 import stat
 import tempfile
 from uvmf_yaml import RegenValidator
+from uvmf_yaml.unmarked import migrate_unmarked
 
 from voluptuous import MultipleInvalid
 from voluptuous.humanize import humanize_error
@@ -27,7 +28,7 @@ class Merge(Base):
     r'^\s*"([^"]+)",\s*(?:#.*)?$'
   )
 
-  def __init__(self,outdir,skip_missing_blocks,new_root,old_root,quiet=False,defer_commit=False):
+  def __init__(self,outdir,skip_missing_blocks,new_root,old_root,quiet=False,defer_commit=False,migrate_unmarked=False):
     self.regen = Regen()
     self.copied_files = []
     self.new_root = os.path.realpath(os.path.abspath(os.path.normpath(new_root)))
@@ -50,6 +51,8 @@ class Merge(Base):
     self.transaction_created_dirs = []
     self.ofs = None
     self.tmp_fname = None
+    self.migrate_unmarked = migrate_unmarked
+    self.migrated_blocks = {}
 
   def assert_path_within(self,root,path,description):
     candidate = os.path.realpath(os.path.abspath(os.path.normpath(path)))
@@ -64,6 +67,22 @@ class Merge(Base):
         )
       )
     return candidate
+
+  def assert_destination(self,path):
+    # Reject links before realpath resolves them to unrelated project files.
+    lexical = os.path.abspath(os.path.normpath(path))
+    try:
+      inside = os.path.commonpath([self.old_root,lexical]) == self.old_root
+    except ValueError:
+      inside = False
+    if not inside:
+      raise UserError('Refusing write outside merge root: '+path)
+    candidate = lexical
+    while candidate != self.old_root:
+      if os.path.islink(candidate):
+        raise UserError('Refusing merge through destination symlink: '+candidate)
+      candidate = os.path.dirname(candidate)
+    return self.assert_path_within(self.old_root,lexical,'write of merged output')
 
   def generated_dependencies(self,fname):
     try:
@@ -145,10 +164,8 @@ class Merge(Base):
       self.new_root,fname,'read of generated merge input'
     )
     ## Figure out path of this new file in the 'old' directory structure (may not exist in 'old')
-    self.old_fname = self.assert_path_within(
-      self.old_root,
-      self.replace_basedir(new_fname,self.new_root,self.old_root),
-      'write of merged output',
+    self.old_fname = self.assert_destination(
+      self.replace_basedir(new_fname,self.new_root,self.old_root)
     )
     self.current_generated_dependencies = self.generated_dependencies(new_fname)
     ## Check if old file doesn't exist in the new. If it doesn't, we need to copy from new to old
@@ -160,6 +177,17 @@ class Merge(Base):
       raise UserError("Internal error - Source file {0} was not properly parsed for named blocks".format(self.old_fname))
     else:
       ## Matched old_fname up with something in the data structure, which means we have a match between old and new.
+      if self.migrate_unmarked and new_fname.endswith(('.sv','.svh')):
+        with open(self.old_fname,'r',encoding='utf-8') as handle:
+          old_text = handle.read()
+        with open(new_fname,'r',encoding='utf-8') as handle:
+          new_text = handle.read()
+        migrations = migrate_unmarked(old_text,new_text,self.old_fname)
+        for label,parts in migrations.items():
+          block = self.rd[self.old_fname].setdefault(label,{'content': ''})
+          block['content'] = parts['before']+block['content']+parts['after']
+        if migrations:
+          self.migrated_blocks[self.old_fname] = sorted(migrations)
       ## Write beside the original and replace it only after a complete merge.
       try:
         fd,self.tmp_fname = tempfile.mkstemp(
@@ -169,7 +197,7 @@ class Merge(Base):
           text=True,
         )
         self.old_mode = stat.S_IMODE(os.stat(self.old_fname).st_mode)
-        self.ofs = os.fdopen(fd,'w')
+        self.ofs = os.fdopen(fd,'w',encoding='utf-8')
       except IOError:
         raise UserError("Unable to create temporary merge file for {0}".format(self.old_fname))
       ## Function returns true if we are now processing the file contents
@@ -483,7 +511,7 @@ class Regen:
       if pre_open_fn(fname)==False:
         return
     try:
-      with open(fname,'r') as fs:
+      with open(fname,'r',encoding='utf-8') as fs:
         for lnum,line in enumerate(fs):
           match = re.search(r"^\s*(\/{2,}|#+) pragma uvmf custom (\w+) (begin|end)",line)
           if match:

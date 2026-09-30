@@ -61,6 +61,7 @@ class uvmf_out_of_order_race_scoreboard #(
   // Transactions are either compared against a transaction with a matching key
   // or stored in the hash if a transaction with a matching key does not exist.
   virtual function void write_expected(input T t);
+    if (!scoreboard_enabled || !enable_expected_port) return;
     transaction_count++;
     ->entry_received;
     compare_or_store_entry(t);
@@ -71,6 +72,7 @@ class uvmf_out_of_order_race_scoreboard #(
   // Transactions are either compared against a transaction with a matching key
   // or stored in the hash if a transaction with a matching key does not exist.
   virtual function void write_actual(input T t);
+    if (!scoreboard_enabled || !enable_actual_port) return;
     ->entry_received;
     compare_or_store_entry(t);
   endfunction

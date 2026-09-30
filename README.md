@@ -85,6 +85,9 @@ counted sub-environment:
 This generates `ucie_apb_env_config[5]` and `ucie_apb_env[5]`, while keeping
 the UVM component names `ucie_apb_env_0` through `ucie_apb_env_4`. Register
 model names and base addresses must still use `{index}` when supplied.
+YAML TLM paths retain those UVM instance names (for example `ucie_apb_env_0.out`);
+generated SystemVerilog connections use indexed members (`ucie_apb_env[0].out`),
+including nested arrays. Archived YAML retains the original instance paths.
 
 ## Register model hierarchy
 
@@ -183,6 +186,35 @@ It cannot automatically preserve arbitrary edits made in generated-file regions
 outside `pragma uvmf custom` blocks. Review the backup for those edits and move
 them into a custom block or a project-owned include file before relying on future
 regeneration.
+
+For legacy SV additions immediately adjacent to known customization positions,
+`--merge_migrate_unmarked` can bootstrap the move into custom blocks:
+
+```bash
+python3 "$UVMF_HOME/scripts/yaml2uvmf.py" \
+  <yaml-files> -g <top-component> \
+  --merge_source="$PROJ_DIR/hw/dv" \
+  --merge_migrate_unmarked
+```
+
+This opt-in option accepts insertion-only changes at four positions:
+
+- `package_item_after_configuration`: package items after the configuration
+  include and before virtual sequencer/environment types;
+- `class_item_before_sequencer`: environment members before the virtual
+  sequencer typedef;
+- `build_phase_components`: construction after generated child components,
+  before register-model and virtual-sequencer construction;
+- `new_pre_config`: configuration initialization immediately after `super.new`,
+  before child configuration construction.
+
+The remaining nonblank generated SV/SVH scaffold must match, and migration
+must not reorder code across existing custom blocks. Unsupported additions,
+replacements or deletions abort the entire merge without changing the project.
+Use this option before changing YAML or upgrading an unrelated template; port
+ambiguous edits manually using the complete backup. Non-SV files retain normal
+custom-block merge behavior. Default merge behavior is unchanged. Destination
+file/directory symlinks are rejected so merge cannot overwrite their targets.
 
 Run the regeneration safety regression with:
 

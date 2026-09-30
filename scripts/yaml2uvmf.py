@@ -88,6 +88,12 @@ def merge_summary(merge,verbose=False):
     for f in merge.copied_files:
       print("     {0}".format(f))
   print("  Found {0} new \"pragma uvmf custom\" blocks in generated source".format(new_block_count))
+  migrated_count = sum(len(labels) for labels in merge.migrated_blocks.values())
+  if migrated_count:
+    print("  Migrated unmarked additions into {0} custom blocks in {1} files".format(migrated_count,len(merge.migrated_blocks)))
+    if verbose:
+      for filename,labels in merge.migrated_blocks.items():
+        print("    {0}: {1}".format(filename,', '.join(labels)))
   if verbose and (len(merge.new_blocks)>0):
     print("   Blocks found in new output but not in merged source. List of new blocks and their associated source file locations:")
     for f in merge.new_blocks:
@@ -97,11 +103,11 @@ def merge_summary(merge,verbose=False):
   if verbose:
     print("===========================================================================")
 
-def audit_output(root):
+def audit_output(root,bench_roots=None):
   root = os.path.abspath(os.path.normpath(root))
   if not os.path.isdir(root):
     return []
-  files,dirs = find_obsolete_outputs(root)
+  files,dirs = find_obsolete_outputs(root,bench_roots)
   findings = [os.path.relpath(path,root).replace('\\','/') for path in files]
   findings.extend(os.path.relpath(path,root).replace('\\','/')+'/' for path in dirs)
   obsolete_dirs = set(dirs)
@@ -125,7 +131,7 @@ class ConfigFileReader:
     self.fname = fname
     self.files = []
     try:
-      self.fh = open(fname,'r')
+      self.fh = open(fname,'r',encoding='utf-8-sig')
     except IOError:
       raise UserError("Unable to open -f/-F file "+fname)
     self.lines = self.fh.readlines()
@@ -290,7 +296,7 @@ class DataClass:
 
   def parseFile(self,fname):
     try:
-      fs = open(fname)
+      fs = open(fname,encoding='utf-8-sig')
     except IOError:
       raise UserError("Unable to open config file "+fname)
     try:
@@ -432,6 +438,26 @@ class DataClass:
           instance[field] = instance[field].replace('{index}',str(index))
       instances.append(instance)
     return instances
+
+  def environmentMemberPath(self,env_name,path):
+    """Map YAML/UVM instance names to SV handles, including nested arrays."""
+    segments = path.split('.')
+    environments = self.data['environments']
+    for position,segment in enumerate(segments):
+      match = None
+      for subenv in environments.get(env_name,{}).get('subenvs',[]):
+        for index,instance in enumerate(self.expandArraySubenvironmentInstances(subenv)):
+          if instance['name'] == segment:
+            match = subenv
+            if subenv.get('array') == 'True':
+              segments[position] = '{0}[{1}]'.format(subenv['name'],index)
+            break
+        if match is not None:
+          break
+      if match is None:
+        break
+      env_name = match['type']
+    return '.'.join(segments)
 
   def validateBenchSelectors(self):
     for bench_name,bench in self.data['benches'].items():
@@ -1410,7 +1436,7 @@ class DataClass:
             print(mess)
           else:
             raise UserError(mess)
-        env.addAnalysisPort(n,t,c)
+        env.addAnalysisPort(n,t,c,memberConnection=self.environmentMemberPath(name,c))
     except KeyError: pass
     try:
       for item in struct['analysis_exports']:
@@ -1424,7 +1450,7 @@ class DataClass:
             print(mess)
           else:
             raise UserError(mess)
-        env.addAnalysisExport(n,t,c)
+        env.addAnalysisExport(n,t,c,memberConnection=self.environmentMemberPath(name,c))
     except KeyError: pass
     try:
       for item in struct['vip_connections']:
@@ -1485,7 +1511,7 @@ class DataClass:
               print(mess)
             else:
               raise UserError(mess)
-        env.addConnection('.'.join(dlist[:-1]),dlist[-1],'.'.join(rlist[:-1]),rlist[-1],v)
+        env.addConnection('.'.join(dlist[:-1]),dlist[-1],'.'.join(rlist[:-1]),rlist[-1],v,memberName=self.environmentMemberPath(name,'.'.join(dlist[:-1])),subscriberMemberName=self.environmentMemberPath(name,'.'.join(rlist[:-1])))
     except KeyError: pass
     try:
       for cfg_item in struct['config_vars']:
@@ -2225,12 +2251,15 @@ def run():
   uvmf_parser.parser.add_option("--pdb",dest="enable_pdb",action="store_true",help=SUPPRESS_HELP,default=False)
   uvmf_parser.parser.add_option("-m","--merge_source",dest="merge_source",action="store",help="Enable auto-merge flow, pulling from the specified source directory")
   uvmf_parser.parser.add_option("-s","--merge_skip_missing_blocks",dest="merge_skip_missing",action="store_true",help="Continue merge if unable to locate a custom block that was defined in old source, producing a report at the end. Default behavior is to raise an error",default=False)
+  uvmf_parser.parser.add_option("--merge_migrate_unmarked",dest="merge_migrate_unmarked",action="store_true",default=False,help="Migrate insertion-only SV additions adjacent to supported custom blocks; reject ambiguous scaffold changes. Requires --merge_source")
   uvmf_parser.parser.add_option("--merge_debug",dest="merge_debug",action="store_true",help="Provide intermediate unmerged output directory for debug purposes. Debug directory can be specified by --dest_dir switch.",default=False)
   uvmf_parser.parser.add_option("--merge_verbose",dest="merge_verbose",action="store_true",help="Output more verbose messages during the merge operation for debug purposes.",default=False)
   uvmf_parser.parser.add_option("--build_existing_components",dest="build_existing_components",action="store_true",help="Ignore \"existing_library_component\" flags and attempt to build anyway.",default=False)
   uvmf_parser.parser.add_option("--no_archive_yaml",dest="no_archive_yaml",action="store_true",default=False,help="Disable YAML archive creation")
   uvmf_parser.parser.add_option("--check",dest="check_only",action="store_true",default=False,help="Validate YAML and report obsolete generated output without writing or deleting files")
   (options,args) = uvmf_parser.parser.parse_args()
+  if options.merge_migrate_unmarked and not options.merge_source:
+    raise UserError("--merge_migrate_unmarked requires --merge_source")
   if options.enable_pdb or options.debug:
     print("Python version info:\n"+sys.version)
   if options.enable_pdb == True:
@@ -2302,7 +2331,8 @@ def run():
       dataObj.dest_dir_override = options.dest_dir
   if options.check_only:
     audit_root = options.merge_source if options.merge_source else options.dest_dir
-    findings = audit_output(audit_root)
+    bench_roots = [os.path.join(audit_root,dataObj.data['global'].get('bench_location','project_benches'),name) for name in dataObj.data['benches']]
+    findings = audit_output(audit_root,bench_roots or None)
     if findings:
       raise UserError("Output audit found obsolete generated content:\n  "+"\n  ".join(findings))
     if not options.quiet:
@@ -2320,7 +2350,7 @@ def run():
     old_root = parse.root
     if not options.quiet:
       print("Merging custom code in {0} with new output ...".format(options.merge_source))
-    merge = Merge(outdir=old_root,skip_missing_blocks=options.merge_skip_missing,new_root=os.path.abspath(os.path.normpath(options.dest_dir)),old_root=old_root,quiet=options.quiet,defer_commit=True)
+    merge = Merge(outdir=old_root,skip_missing_blocks=options.merge_skip_missing,new_root=os.path.abspath(os.path.normpath(options.dest_dir)),old_root=old_root,quiet=options.quiet,defer_commit=True,migrate_unmarked=options.merge_migrate_unmarked)
     merge.load_data(parse.data)
     cleanup_transaction = None
     try:
@@ -2344,9 +2374,12 @@ def run():
       cleanup_transaction.commit()
       merge.commit()
     except BaseException:
-      if cleanup_transaction is not None:
-        cleanup_transaction.rollback()
-      merge.rollback()
+      try:
+        if cleanup_transaction is not None:
+          cleanup_transaction.rollback()
+      finally:
+        # A cleanup restoration error must not skip restoration of merged files.
+        merge.rollback()
       raise
     if not options.quiet:
       print("Merge complete!")

@@ -1435,6 +1435,179 @@ class SocIntegrationTest(unittest.TestCase):
       self.assertIn("soc_environment.svh",result.stdout+result.stderr)
       self.assertEqual(stale.read_text(encoding="utf-8"),before)
 
+  def test_check_uses_configured_bench_location(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config,output = root / "soc.yaml",root / "output"
+      config.write_text(BASE_YAML.replace("uvmf:\n","uvmf:\n  global:\n    bench_location: custom_benches\n",1),encoding="utf-8")
+      stale = output / "custom_benches" / "soc" / "tb" / "tests" / "src" / "register_test.sv"
+      stale.parent.mkdir(parents=True)
+      stale.write_text("// Created with uvmf_gen version 2023.4_2\n",encoding="utf-8")
+      result = self.run_generator(config,output,"--check")
+      self.assertNotEqual(result.returncode,0)
+      self.assertIn("custom_benches/soc/tb/tests/src/register_test.sv",result.stdout+result.stderr)
+      self.assertTrue(stale.is_file())
+
+  def test_utf8_yaml_and_custom_code_roundtrip(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config,output = root / "soc.yaml",root / "output"
+      config.write_text(BASE_YAML+"# 项目注释 ‘UTF-8’\n",encoding="utf-8")
+      first = self.run_generator(config,output,"-g","environment:soc")
+      self.assertEqual(first.returncode,0,first.stderr)
+      path = output / "verification_ip" / "environment_packages" / "soc_env_pkg" / "src" / "soc_environment.sv"
+      custom = "  // 项目注释 ‘UTF-8’\n"
+      path.write_text(path.read_text(encoding="utf-8").replace("  // pragma uvmf custom class_item_additional end",custom+"  // pragma uvmf custom class_item_additional end"),encoding="utf-8")
+      merged = self.run_generator(config,output,"-g","environment:soc","--merge_source",str(output))
+      self.assertEqual(merged.returncode,0,merged.stderr)
+      self.assertIn(custom,path.read_text(encoding="utf-8"))
+
+  def test_interface_initialize_hook_precedes_generated_config_db_work(self):
+    for dpi in (False,True):
+      with self.subTest(dpi=dpi),tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        config,output = root / "soc.yaml",root / "output"
+        config.write_text(BASE_YAML.replace("    bus:\n","    bus:\n      use_dpi_link: {}\n".format(str(dpi).lower()),1),encoding="utf-8")
+        result = self.run_generator(config,output,"-g","interface:bus")
+        self.assertEqual(result.returncode,0,result.stderr)
+        path = output / "verification_ip" / "interface_packages" / "bus_pkg" / "src" / "bus_configuration.sv"
+        text = path.read_text(encoding="utf-8")
+        body = text[text.index("virtual function void initialize"):]
+        begin,end = body.index("custom initialize begin"),body.index("custom initialize end")
+        self.assertLess(begin,end)
+        self.assertLess(end,body.index("UVMF_AGENT_CONFIG"))
+        if not dpi:
+          between = body[body.index("super.initialize("):begin]
+          self.assertEqual(between.count(";"),1)
+        else:
+          self.assertLess(body.index("monitor_bfm  ="),begin)
+
+  def test_array_tlm_connections_render_indexed_members_and_keep_instance_names(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config,output = root / "soc.yaml",root / "output"
+      config.write_text("""uvmf:
+  interfaces:
+    bus:
+      clock: clk
+      reset: rst
+      transaction_vars:
+        - {name: data, type: bit, isrand: false, iscompare: true}
+  environments:
+    leaf:
+      agents:
+        - {name: a, type: bus}
+      analysis_ports:
+        - {name: out, trans_type: bit, connected_to: a.monitored_ap}
+      scoreboards:
+        - {name: sb, sb_type: uvmf_in_order_scoreboard, trans_type: bit}
+      analysis_exports:
+        - {name: in, trans_type: bit, connected_to: sb.expected_analysis_export}
+    middle:
+      subenvs:
+        - {name: leaf, type: leaf, count: 2, array: true}
+      analysis_ports:
+        - {name: out, trans_type: bit, connected_to: leaf_0.out}
+      analysis_exports:
+        - {name: in, trans_type: bit, connected_to: leaf_1.in}
+      tlm_connections:
+        - {driver: leaf_0.out, receiver: leaf_1.in}
+    soc:
+      subenvs:
+        - {name: middle, type: middle, count: 2, array: true}
+        - {name: scalar, type: middle}
+      tlm_connections:
+        - {driver: middle_0.out, receiver: middle_1.in}
+        - {driver: middle_0.leaf_1.out, receiver: scalar.leaf_0.in, validate: 'False'}
+  benches:
+    soc: {top_env: soc}
+""",encoding="utf-8")
+      result = self.run_generator(config,output)
+      self.assertEqual(result.returncode,0,result.stderr)
+      env_root = output / "verification_ip" / "environment_packages"
+      middle = (env_root / "middle_env_pkg" / "src" / "middle_environment.sv").read_text(encoding="utf-8")
+      soc = (env_root / "soc_env_pkg" / "src" / "soc_environment.sv").read_text(encoding="utf-8")
+      for connection in ("leaf[0].out.connect(leaf[1].in);","leaf[0].out.connect(out);","in.connect(leaf[1].in);"):
+        self.assertIn(connection,middle)
+      self.assertIn("middle[0].out.connect(middle[1].in);",soc)
+      self.assertIn("middle[0].leaf[1].out.connect(scalar.leaf[0].in);",soc)
+      self.assertIn('$sformatf("middle_%0d", i)',soc)
+      self.assertNotIn("middle_0.out.connect",soc)
+      archive = env_root / "soc_env_pkg" / "yaml" / "soc_environment.yaml"
+      self.assertIn("driver: middle_0.out",archive.read_text(encoding="utf-8"))
+      middle_archive = env_root / "middle_env_pkg" / "yaml" / "middle_environment.yaml"
+      self.assertIn("connected_to: leaf_0.out",middle_archive.read_text(encoding="utf-8"))
+      data = self.data_object()
+      for path in (
+        output / "verification_ip" / "interface_packages" / "bus_pkg" / "yaml" / "bus_interface.yaml",
+        env_root / "leaf_env_pkg" / "yaml" / "leaf_environment.yaml",
+        middle_archive,archive,
+      ):
+        data.parseFile(str(path))
+      data.validate()
+
+  def test_merge_migrates_adjacent_unmarked_additions_and_is_idempotent(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config,output = root / "soc.yaml",root / "output"
+      config.write_text(BASE_YAML,encoding="utf-8")
+      first = self.run_generator(config,output,"-g","soc")
+      self.assertEqual(first.returncode,0,first.stderr)
+      package_root = output / "verification_ip" / "environment_packages" / "soc_env_pkg"
+      package = package_root / "soc_env_pkg.sv"
+      env = package_root / "src" / "soc_environment.sv"
+      cfg = package_root / "src" / "soc_env_configuration.sv"
+      include = '  `include "src/project_scoreboard.sv"\n'
+      member = "  project_scoreboard scoreboard;\n"
+      build = '    scoreboard = project_scoreboard::type_id::create("scoreboard", this);\n'
+      early_config = '    if ($test$plusargs("PROJECT_MODE")) project_mode = 1;\n'
+      existing = "  int existing_member;\n"
+      package.write_text(package.read_text(encoding="utf-8").replace("  // pragma uvmf custom package_item_after_configuration end\n","  // pragma uvmf custom package_item_after_configuration end\n"+include),encoding="utf-8")
+      content = env.read_text(encoding="utf-8")
+      content = content.replace("  // pragma uvmf custom class_item_before_sequencer begin\n  // pragma uvmf custom class_item_before_sequencer end\n",member)
+      content = content.replace("    // pragma uvmf custom build_phase_components begin\n    // pragma uvmf custom build_phase_components end\n",build)
+      content = content.replace("  // pragma uvmf custom class_item_additional end",existing+"  // pragma uvmf custom class_item_additional end")
+      env.write_text(content,encoding="utf-8")
+      cfg.write_text(cfg.read_text(encoding="utf-8").replace("    // pragma uvmf custom new_pre_config begin\n    // pragma uvmf custom new_pre_config end\n",early_config),encoding="utf-8")
+      original = {path: path.read_bytes() for path in (package,env,cfg)}
+      for attempt in range(2):
+        merged = self.run_generator(config,output,"-g","soc","--merge_source",str(output),"--merge_migrate_unmarked")
+        self.assertEqual(merged.returncode,0,merged.stderr)
+        for path,addition,label in (
+          (package,include,"package_item_after_configuration"),
+          (env,member,"class_item_before_sequencer"),
+          (env,build,"build_phase_components"),
+          (cfg,early_config,"new_pre_config"),
+        ):
+          text = path.read_text(encoding="utf-8")
+          begin,end = text.index("custom "+label+" begin"),text.index("custom "+label+" end")
+          self.assertIn(addition,text[begin:end])
+          self.assertEqual(text.count(addition),1)
+        self.assertIn(existing,env.read_text(encoding="utf-8"))
+        current = {path: path.read_bytes() for path in original}
+        if attempt == 0:
+          after_first = current
+          for path,content in original.items():
+            self.assertEqual((root / "output_bak_0" / path.relative_to(output)).read_bytes(),content)
+        else:
+          self.assertEqual(current,after_first)
+
+  def test_unsafe_unmarked_migration_keeps_complete_project(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config,output = root / "soc.yaml",root / "output"
+      config.write_text(BASE_YAML,encoding="utf-8")
+      first = self.run_generator(config,output,"-g","soc")
+      self.assertEqual(first.returncode,0,first.stderr)
+      path = output / "verification_ip" / "environment_packages" / "soc_env_pkg" / "src" / "soc_environment.sv"
+      path.write_text(path.read_text(encoding="utf-8").replace('create("ip0", this)','create("project_name", this)'),encoding="utf-8")
+      before = {file.relative_to(output): file.read_bytes() for file in output.rglob("*") if file.is_file()}
+      result = self.run_generator(config,output,"-g","soc","--merge_source",str(output),"--merge_migrate_unmarked")
+      self.assertNotEqual(result.returncode,0)
+      self.assertIn("Cannot safely migrate unmarked",result.stdout+result.stderr)
+      after = {file.relative_to(output): file.read_bytes() for file in output.rglob("*") if file.is_file()}
+      self.assertEqual(before,after)
+
 
 if __name__ == "__main__":
   unittest.main()
