@@ -31,10 +31,9 @@
 
 // PACKAGE: uvmf_base_pkg
 // This package contains classes used as a base class library. It facilitates
-// component level reuse and environment level reuse.  This package is used
-// when using Veloce.  It contains the classes that are compiled for use on
-// the host server.  The uvmf_base_hdl_pkg contains the types compiled for
-// use on Veloce.
+// component level reuse and environment level reuse. It contains the UVM
+// classes used by software simulation. The uvmf_base_pkg_hdl package contains
+// the shared types used by interfaces and BFMs.
 
 // CONTAINS:
 //    - <uvmf_standard_port_debug_policy>

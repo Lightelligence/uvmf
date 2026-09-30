@@ -19,7 +19,7 @@
 //      and from_struct methods defined in the macros below that are used in
 //      the {{name}}_configuration class.
 
-{% if veloceReady %}
+{% if useStructBfm %}
   `define {{name}}_CONFIGURATION_STRUCT \
 typedef struct packed  { \
 {% for config in configVars %}

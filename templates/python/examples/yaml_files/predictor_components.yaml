@@ -3,7 +3,7 @@
 # example configurations. In general, these are predictors of various types, although
 # a type of 'coverage' is also supported. All utility components can contain any number
 # of analysis exports and analysis imports, each with a unique name and defined type.
-# The user will be responsible for filling out the internals of a predictor and 
+# The user will be responsible for filling out the internals of a predictor and
 # producing write() calls on the analysis ports. For a coverage component the user will
 # need to define meaningful functional coverage content.
 
@@ -13,14 +13,14 @@
 
 uvmf:
   util_components:
-    "block_a_predictor" :  
+    "block_a_predictor" :
       type: "predictor"
       analysis_exports :
         - name: "control_plane_in_ae"
           type: "mem_transaction"
         - name: "secure_data_plane_in_ae"
           type: "pkt_transaction"
-      analysis_ports : 
+      analysis_ports :
         - name: "control_plane_sb_ap"
           type: "mem_transaction"
         - name: "secure_data_plane_sb_ap"
@@ -32,10 +32,10 @@ uvmf:
           type: "type"
         - name: "ap_mem_transaction_t"
           type: "type"
-      analysis_exports : 
+      analysis_exports :
         - name: "control_plane_in_ae"
           type: "ae_mem_transaction_t"
-      analysis_ports : 
+      analysis_ports :
         - name: "control_plane_sb_ap"
           type: "ap_mem_transaction_t"
     "unsecure_data_plane_predictor" :
@@ -61,18 +61,18 @@ uvmf:
         - name: "mem_in_ae"
           type: "mem_transaction"
         - name: "axi4_master_1_ae"
-          type: "mvc_sequence_item_base"
+          type: "uvm_sequence_item"
         - name: "axi4_master_0_ae"
-          type: "mvc_sequence_item_base"
+          type: "uvm_sequence_item"
       analysis_ports:
         - name: "pkt_sb_ap"
           type: "pkt_transaction"
         - name: "mem_sb_ap"
           type: "mem_transaction"
         - name: "apb3_config_master_ap"
-          type: "mvc_sequence_item_base"
+          type: "uvm_sequence_item"
         - name: "axi4_slave_ap"
-          type: "mvc_sequence_item_base"
+          type: "uvm_sequence_item"
     "block_a_coverage" :
       type: coverage
       analysis_exports:
@@ -80,4 +80,4 @@ uvmf:
           type: "mem_transaction"
         - name: "secure_data_plane_in_ae"
           type: "pkt_transaction"
-        
+

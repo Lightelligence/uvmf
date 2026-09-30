@@ -37,7 +37,7 @@ package {{name}}_parameters_pkg;
 {% endfor %}
 {% endif %}
 {% if useCoEmuClkRstGen %}
-  parameter CLK_PHASE_OFFSET_IN_PS     = 2000; //Cannot be less than 500 according to Veloce
+  parameter CLK_PHASE_OFFSET_IN_PS     = 2000;
   parameter INIT_CLOCK_HALF_PERIOD     = 2000;
   parameter RST_POLARITY               = {% if resetAssertionLevel %}1{% else %}0{% endif %};
   parameter START_IN_RESET             = 0;

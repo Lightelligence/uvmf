@@ -30,7 +30,7 @@
 
 
 // PACKAGE: uvmf_base_pkg
-// This package contains synthesizable types used inside Veloce.
+// This package contains shared synthesizable interface and BFM types.
 
 // CONTAINS:
 //    - <uvmf_base_typedefs_hdl>

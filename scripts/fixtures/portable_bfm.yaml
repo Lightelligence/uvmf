@@ -1,0 +1,18 @@
+uvmf:
+  interfaces:
+    struct_bus:
+      clock: clk
+      reset: rst
+      use_struct_bfm: true
+      config_vars:
+        - {name: mode, type: "bit [7:0]", value: "8'h5a"}
+      transaction_vars:
+        - {name: data, type: "bit [7:0]", isrand: true, iscompare: true}
+    object_bus:
+      clock: clk
+      reset: rst
+      use_struct_bfm: false
+      config_vars:
+        - {name: mode, type: "bit [7:0]", value: "8'ha5"}
+      transaction_vars:
+        - {name: data, type: "bit [7:0]", isrand: true, iscompare: true}

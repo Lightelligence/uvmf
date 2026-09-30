@@ -11,7 +11,6 @@ uvmf:
       clock_phase_offset : "21ns"
       reset_assertion_level : "True"
       reset_duration : "250ns"
-#      veloce_ready: "True"
 #      use_coemu_clk_rst_gen: "True"
       ## Set this flag to disable generation of this bench
 #      existing_library_component : "True"
@@ -22,14 +21,14 @@ uvmf:
 #        type: "int"
 #        value: "20"
 #      top_env_params:
-#        - name: "ENV_PARAMETER" 
-#          value: "TEST_PARAMETER"  
-#      active_passive_default: "ACTIVE or PASSIVE" 
-       ## For active_passive and interface_params, the bfm_name field must 
+#        - name: "ENV_PARAMETER"
+#          value: "TEST_PARAMETER"
+#      active_passive_default: "ACTIVE or PASSIVE"
+       ## For active_passive and interface_params, the bfm_name field must
        ## include the full UVM environment hierarchy down to the agent.
        ## Underscores, _'s, must be used instead of dots, .'s, for delimiting
        ## environment hierarchy.
-#      active_passive:   
+#      active_passive:
 #        - bfm_name: "agent_name"
 #          value: "PASSIVE"
 #      interface_params:

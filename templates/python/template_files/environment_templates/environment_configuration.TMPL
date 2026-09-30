@@ -72,11 +72,7 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% endif %}
 {% endfor -%}
 
-{% for sub_env in qvipSubEnvironments %}
-    {{sub_env.envPkg}}_env_configuration     {{sub_env.name}}_config;
-    string                                   {{sub_env.name}}_interface_names[];
-    uvmf_active_passive_t                    {{sub_env.name}}_interface_activity[];
-{% endfor %}
+
 
 {% if is_top_env %}
   typedef uvmf_virtual_sequencer_base #(
@@ -111,11 +107,9 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 
 {% for agent in agents %}
     {{agent.name}}_config = {{agent.name}}_config_t::type_id::create("{{agent.name}}_config");
-{% endfor -%}
-
-{% for sub_env in qvipSubEnvironments %}
-    {{sub_env.name}}_config = {{sub_env.envPkg}}_env_configuration::type_id::create("{{sub_env.name}}_config");
 {% endfor %}
+
+
 
     {{name}}_configuration_cg = new;
     //`uvm_warning("COVERAGE_MODEL_REVIEW", "A covergroup has been constructed which may need review because of either generation or re-generation with merging.  Please note that configuration variables added as a result of re-generation and merging are not automatically added to the covergroup.  Remove this warning after the covergroup has been reviewed.")
@@ -171,29 +165,24 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
     result = {result, "\n", {{subEnv.name}}_config.convert2string()};
 {% endif %}
 {% endfor -%}
-{% for sub_env in qvipSubEnvironments %}
-    result = {result, "\n", {{sub_env.name}}_config.convert2string()};
-{% endfor %}
+
     return result;
 {% else %}
     return {
-     {% if configVars|length > 0 %}$sformatf("{% for config in configVars %}{{config.name}}:0x%x {% endfor -%}"{% for config in configVars %},{{config.name}}{% endfor -%}){% if agents|length > 0 or subEnvironments|length > 0 or qvipSubEnvironments|length > 0 %},{% endif -%}{% endif -%}
+     {% if configVars|length > 0 %}$sformatf("{% for config in configVars %}{{config.name}}:0x%x {% endfor -%}"{% for config in configVars %},{{config.name}}{% endfor -%}){% if agents|length > 0 or subEnvironments|length > 0 %},{% endif -%}{% endif -%}
 
 {% for agent in agents %}
      "\n", {{agent.name}}_config.convert2string{% if not loop.last %},
 {% endif %}{% endfor -%}
-{% if agents|length > 0 %}{% if subEnvironments|length > 0 or qvipSubEnvironments|length > 0 %},{% endif -%}{% endif -%}
+{% if agents|length > 0 %}{% if subEnvironments|length > 0 %},{% endif -%}{% endif -%}
 
 {% for subEnv in subEnvironments %}
      "\n", {{subEnv.name}}_config.convert2string{% if not loop.last %},
 {% endif -%}
 {% endfor -%}
-{% if subEnvironments|length > 0 %}{% if qvipSubEnvironments|length > 0 %},{% endif -%}{% endif -%}
+{% if subEnvironments|length > 0 %}{% endif -%}
 
-{% for sub_env in qvipSubEnvironments %}
-     "\n", {{sub_env.name}}_config.convert2string{% if not loop.last %},
-{% endif -%}
-{% endfor -%}
+
 
        };
 {% endif %}
@@ -239,16 +228,8 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% endif %}
 {% endfor -%}
 
-{% if vipSubEnvironments|length > 0 %}  // Interface initialization for VIP sub-environments
-{% endif %}
-{% for sub_env in vipSubEnvironments %}
-    {{sub_env.name}}_interface_names    = new[{{sub_env.numAgents}}];
-    {{sub_env.name}}_interface_activity = new[{{sub_env.numAgents}}];
 
-    {{sub_env.name}}_interface_names     = interface_names[{{sub_env.agentMinIndex}}:{{sub_env.agentMaxIndex}}];
-    {{sub_env.name}}_interface_activity  = interface_activity[{{sub_env.agentMinIndex}}:{{sub_env.agentMaxIndex}}];
 
-{% endfor -%}
 
 {% if agents|length > 0 %}  // Interface initialization for local agents
 {% endif %}
@@ -290,9 +271,7 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 {% endif %}
 {% endfor -%}
 
-{% for sub_env in qvipSubEnvironments %}
-     {{sub_env.name}}_config.initialize( sim_level, {environment_path,".{{sub_env.name}}"}, {{sub_env.name}}_interface_names, null,   {{sub_env.name}}_interface_activity);
-{% endfor -%}
+
 
 {% for configVariable in configVariableValues %}
      {{configVariable.name}} = {{configVariable.value}};

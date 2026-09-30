@@ -139,16 +139,9 @@ class uvmf_transaction_base #(
   endfunction
 
   // FUNCTION: add_to_wave
-  // Questa system function calls to add transaction variables to the transaction
+  // Compatibility hook to add transaction variables to the transaction
   // handle for viewing transactions in the wave form viewer
   virtual function void add_to_wave(int transaction_viewing_stream_h);
-`ifdef QUESTA
-    if (transaction_view_h == 0)
-      transaction_view_h = $begin_transaction(
-          transaction_viewing_stream_h, "Transaction", start_time
-      );
-    $add_attribute(transaction_view_h, unique_transaction_id, "unique_transaction_id");
-`endif  // QUESTA
   endfunction
 
   // FUNCTION: convert2string

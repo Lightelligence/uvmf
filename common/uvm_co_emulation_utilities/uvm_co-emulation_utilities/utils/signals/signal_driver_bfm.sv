@@ -4,7 +4,7 @@ interface signal_driver_bfm #(
     input clock,
     output bit [SIGNAL_SIZE-1:0] signals_out
 );
-  // pragma attribute signal_driver_bfm partition_interface_xif
+
 
   //---------------------------------------------------------------------------
   // Declarations
@@ -17,11 +17,11 @@ interface signal_driver_bfm #(
   // Tasks to talk to the proxy
   //---------------------------------------------------------------------------
   // control monitoring enable and timeout
-  function void set_driven_signals(bit [SIGNAL_SIZE-1:0] drive_signals);  // pragma tbx xtf
+  function void set_driven_signals(bit [SIGNAL_SIZE-1:0] drive_signals);
     signals_to_drive = drive_signals;
   endfunction
 
-  function void get_driven_signals(output bit [SIGNAL_SIZE-1:0] driven_signals);  // pragma tbx xtf
+  function void get_driven_signals(output bit [SIGNAL_SIZE-1:0] driven_signals);
     driven_signals = signals_out;
   endfunction
 

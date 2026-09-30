@@ -49,7 +49,7 @@ class {{name}}_configuration {{macro.paramDeclare(paramDefs)|indent(6)}} extends
     // pragma uvmf custom covergroup end
   endgroup
 
-{% if veloceReady %}
+{% if useStructBfm %}
   //*******************************************************************
   //*******************************************************************
   // Structure used to pass configuration variables to monitor and driver BFM's.
@@ -150,8 +150,7 @@ class {{name}}_configuration {{macro.paramDeclare(paramDefs)|indent(6)}} extends
                     )::set( null ,agent_path,UVMF_AGENT_CONFIG, this );
 
     // This configuration also places itself in the config db using the same identifier used by the interface.  This allows users to access
-    // configuration variables and the interface through the bfm api class rather than directly accessing the BFM.  This is useful for
-    // accessingthe BFM when using Veloce
+    // configuration variables and the interface through the bfm api class rather than directly accessing the BFM.
     uvm_config_db #( {{name}}_configuration  {{macro.paramUse(paramDefs)|indent(29)}}
                     )::set( null ,UVMF_CONFIGURATIONS, interface_name, this );
 

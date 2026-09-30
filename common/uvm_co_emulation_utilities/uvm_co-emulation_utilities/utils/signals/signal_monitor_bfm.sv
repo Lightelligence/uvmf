@@ -11,13 +11,13 @@ interface signal_monitor_bfm #(
     input clock,
     input [SIGNAL_SIZE-1:0] signals_in
 );
-  // pragma attribute signal_monitor_bfm partition_interface_xif
+
 
   //---------------------------------------------------------------------------
   // Declarations
   //---------------------------------------------------------------------------
 
-  signal_monitor_pkg::signal_monitor_proxy #(SIGNAL_SIZE,BUFFER_SIZE) proxy; // pragma tbx oneway proxy.write
+  signal_monitor_pkg::signal_monitor_proxy #(SIGNAL_SIZE,BUFFER_SIZE) proxy;
 
   bit ctrl_monitor_en;  // defaults to 0
   bit monitor_en;  // defaults to 0
@@ -57,19 +57,19 @@ interface signal_monitor_bfm #(
   // Tasks to talk to the proxy
   //---------------------------------------------------------------------------
   // control monitoring enable and timeout
-  function void monitor_control(bit enable, int unsigned timeout);  // pragma tbx xtf
+  function void monitor_control(bit enable, int unsigned timeout);
     ctrl_monitor_en = enable;
     timeout_max = timeout;
   endfunction
 
   function void get_signal_pattern(bit [SIGNAL_SIZE-1:0] pattern_to_find,
-                                   bit [7:0] count);  // pragma tbx xtf
+                                   bit [7:0] count);
     signal_pattern = pattern_to_find;
     find_count = count;
     ->new_pattern;
   endfunction
 
-  task get_signals(output bit [SIGNAL_SIZE-1:0] signals_now);  // pragma tbx xtf
+  task get_signals(output bit [SIGNAL_SIZE-1:0] signals_now);
     // have wait on clock as first statement.
     @(posedge clock);
     signals_now = signals_in;
