@@ -113,6 +113,7 @@ class uvmf_in_order_race_scoreboard_array #(
       if (real_key >= ARRAY_DEPTH) begin : expected_key_check
         `uvm_error("SCBD", $sformatf("Invalid key %d out of valid range between 0 and %d",
                                      real_key, ARRAY_DEPTH))
+        return;
       end : expected_key_check
       super.write_expected(t);
       // Check if there is a next entry from actual analysis fifo.  If none exists, queue expected item
@@ -140,11 +141,12 @@ class uvmf_in_order_race_scoreboard_array #(
     int unsigned real_key;
     real_key = t.get_key() & 32'h7FFFFFFF;
     if (scoreboard_enabled && enable_actual_port) begin : in_write_actual
-      super.write_actual(t);
       if (real_key >= ARRAY_DEPTH) begin : actual_key_check
         `uvm_error("SCBD", $sformatf("Invalid key %d out of valid range between 0 and %d",
                                      real_key, ARRAY_DEPTH))
+        return;
       end : actual_key_check
+      super.write_actual(t);
 
       // Check if there is a next entry from expected analysis fifo.  If none exists, queue actual item
       if (expected_results_q[real_key].size() == 0) begin : no_expected_entry_to_compare_against

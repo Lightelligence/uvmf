@@ -113,6 +113,8 @@ def main():
   steps = [
     [sys.executable, "-m", "compileall", "-q", "scripts", "templates/python/uvmf_gen.py", "templates/python/uvmf_yaml"],
     [sys.executable, str(REPO_ROOT / "scripts" / "test_regeneration_safety.py")],
+    [sys.executable, str(REPO_ROOT / "scripts" / "test_unmarked_migration.py")],
+    [sys.executable, str(REPO_ROOT / "scripts" / "test_scoreboard_contracts.py")],
     [sys.executable, str(REPO_ROOT / "scripts" / "test_soc_integration.py")],
     ["git", "diff", "--check"],
   ]

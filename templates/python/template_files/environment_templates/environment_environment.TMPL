@@ -101,6 +101,9 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 {% endif %}
 {% endfor %}
 
+  // pragma uvmf custom class_item_before_sequencer begin
+  // pragma uvmf custom class_item_before_sequencer end
+
 {% if is_top_env %}
   typedef {{name}}_virtual_sequencer #(
     .CONFIG_T({{name}}_env_configuration{{macro.paramUse(paramDefs)|indent(14)}}){% for param in paramDefs %},
@@ -178,6 +181,9 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 {% for c2eConn in c2eConnections %}
    {{c2eConn.name}} = new("{{c2eConn.name}}",this);
 {% endfor %}
+    // pragma uvmf custom build_phase_components begin
+    // pragma uvmf custom build_phase_components end
+
 {% for regModel in regModels %}
     // pragma uvmf custom reg_model_build_phase begin
 {% if regModel.transactionType != None %}
@@ -218,7 +224,7 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 {% endif %}
 {% endfor %}
 {% for conn in connections %}
-    {{conn.name}}.{{conn.pName}}.connect({{conn.subscriberName}}.{{conn.aeName}});
+    {{conn.memberName}}.{{conn.pName}}.connect({{conn.subscriberMemberName}}.{{conn.aeName}});
 {% endfor -%}
 {% for agent in vip_ap_names %}
      {{agent.name}}_{{agent.agent}}_ap = {{agent.name}}.{{agent.agent}}.ap;
@@ -233,10 +239,10 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 {% endfor -%}
 {% endfor -%}
 {% for ap in analysis_ports %}
-    {{ap.connection}}.connect({{ap.name}});
+    {{ap.memberConnection}}.connect({{ap.name}});
 {% endfor %}
 {% for ep in analysis_exports %}
-    {{ep.name}}.connect({{ep.connection}});
+    {{ep.name}}.connect({{ep.memberConnection}});
 {% endfor %}
     // pragma uvmf custom reg_model_connect_phase begin
 {% for regModel in regModels %}

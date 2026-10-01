@@ -330,6 +330,12 @@ class BaseGeneratorClass(BaseElementClass):
 
   def normalizeGeneratedSource(self,fname,content):
     """Apply low-risk lint cleanup to generated SV/Verilog source files."""
+    from uvmf_yaml.custom_bazel import is_bazel_file, wrap_bazel_file
+    if is_bazel_file(fname):
+      # Interface templates inherit a Verilog-style header. Bazel comments
+      # use '#'; convert comment lines only, never labels containing '//'.
+      content = re.sub(r'^([ \t]*)//',r'\1#',content,flags=re.MULTILINE)
+      return wrap_bazel_file(content)
     if not fname.lower().endswith(('.sv','.svh','.v','.vh','.svp','.vp')):
       return content
     content = self.rewriteGeneratedSvhReferences(content)
@@ -472,7 +478,7 @@ class BaseGeneratorClass(BaseElementClass):
     dirpath = os.path.dirname(full)
     fd,tmp = tempfile.mkstemp(prefix='.'+os.path.basename(full)+'.',suffix='.uvmf_tmp',dir=dirpath,text=True)
     try:
-      with os.fdopen(fd,'w') as fh:
+      with os.fdopen(fd,'w',encoding='utf-8') as fh:
         fh.write(content)
       if os.path.exists(full):
         os.chmod(tmp,stat.S_IMODE(os.stat(full).st_mode))
@@ -997,17 +1003,19 @@ class VmapClass(BaseElementClass):
     self.dirName = dirName
 
 class AnalysisExportClass(BaseElementClass):
-  def __init__(self,name,tType,connection="",QVIPConn=False):
+  def __init__(self,name,tType,connection="",QVIPConn=False,memberConnection=None):
     super(AnalysisExportClass,self).__init__(name)
     self.tType = tType
     self.connection = connection
+    self.memberConnection = connection if memberConnection is None else memberConnection
     self.QVIPConn = QVIPConn
 
 class AnalysisPortClass(BaseElementClass):
-  def __init__(self,name,tType,connection=""):
+  def __init__(self,name,tType,connection="",memberConnection=None):
     super(AnalysisPortClass,self).__init__(name)
     self.tType = tType
     self.connection = connection
+    self.memberConnection = connection if memberConnection is None else memberConnection
 
 class analysisComponentInstClass(BaseElementClass):
   def __init__(self,name,type,parametersDict,extDef):
@@ -1028,12 +1036,14 @@ class envScoreboardClass(BaseElementClass):
       self.parameters.append(ParameterValueClass(parameterName,parametersDict[parameterName]))
 
 class connectionClass(BaseElementClass):
-  def __init__(self,name,pName,subscriberName, aeName, validate):
+  def __init__(self,name,pName,subscriberName, aeName, validate,memberName=None,subscriberMemberName=None):
     super(connectionClass,self).__init__(name)
     self.pName = pName
     self.subscriberName = subscriberName
     self.aeName = aeName
     self.validate = validate
+    self.memberName = name if memberName is None else memberName
+    self.subscriberMemberName = subscriberName if subscriberMemberName is None else subscriberMemberName
 
 class InterfaceClass(BaseGeneratorClass):
   """Use this class to produce files associated with a particular interface or agent package"""
@@ -1420,13 +1430,13 @@ class EnvironmentClass(BaseGeneratorClass):
   def addVipSubEnv(self,name,envPkg,agentList,envHasICVIP,envHasQVIP):
     self.addQvipSubEnv(name,envPkg,agentList,envHasICVIP,envHasQVIP)
 
-  def addAnalysisPort(self,name,tType,connection=""):
+  def addAnalysisPort(self,name,tType,connection="",memberConnection=None):
     """Build and connect an analysis port connection of the given name and transaction type"""
-    self.analysis_ports.append(AnalysisPortClass(name,tType,connection))
+    self.analysis_ports.append(AnalysisPortClass(name,tType,connection,memberConnection))
 
-  def addAnalysisExport(self,name,tType,connection=""):
+  def addAnalysisExport(self,name,tType,connection="",memberConnection=None):
     """Build and connect an analysis export connection of the given name and transaction type"""
-    self.analysis_exports.append(AnalysisExportClass(name,tType,connection))
+    self.analysis_exports.append(AnalysisExportClass(name,tType,connection,memberConnection=memberConnection))
 
   def addQvipConnection(self, output_component, output_port_name, input_component, input_component_export_name,validate=True):
     """Add a Qvip Connection for the environment package"""
@@ -1484,9 +1494,9 @@ class EnvironmentClass(BaseGeneratorClass):
     self.scoreboards.append(envScoreboardClass(name,sType,tType,parametersDict))
 
   # addConnection(outputComponentName, outputPortName, inputComponentName, inputPortName)
-  def  addConnection(self, name, pName, subscriberName, aeName, validate=True):
+  def  addConnection(self, name, pName, subscriberName, aeName, validate=True,memberName=None,subscriberMemberName=None):
     """Add a connection between two components in the definition of this environment class"""
-    self.connections.append(connectionClass(name,pName,subscriberName, aeName, validate))
+    self.connections.append(connectionClass(name,pName,subscriberName, aeName, validate,memberName,subscriberMemberName))
 
   ## Overload of the create function - add some extra loops on the end for analysis components
   def create(self,desired_template='all',parser=None,archive_yaml=True):

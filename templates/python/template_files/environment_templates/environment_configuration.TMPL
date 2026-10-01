@@ -96,6 +96,9 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
   function new( string name = "" );
     super.new( name );
 
+    // pragma uvmf custom new_pre_config begin
+    // pragma uvmf custom new_pre_config end
+
 {% for sub_env in subEnvironments %}
 {% if sub_env.isArray %}
     foreach ({{sub_env.name}}_config[i]) begin

@@ -371,5 +371,5 @@ def canonical_yaml_values(value,key=None):
 
 class YAMLGenerator:
   def __init__(self,data,outfilename,default_style='"'):
-    with open(outfilename,'w') as outfile:
+    with open(outfilename,'w',encoding='utf-8') as outfile:
       yaml.dump(canonical_yaml_values(data),outfile,default_flow_style=False,width=float('inf'),sort_keys=False)

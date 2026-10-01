@@ -56,6 +56,9 @@ import uvmc_pkg::*;
   endtask
 
 
+// pragma uvmf custom description_b_target_socket begin
+// pragma uvmf custom description_b_target_socket end
+
 `define uvm_tlm_b_target_socket_decl(SFX)                               \
 class uvm_tlm_b_target_socket``SFX #(type IMP=int,                      \
                                      type T=uvm_tlm_generic_payload)    \
@@ -102,6 +105,9 @@ endclass
     return imp.nb_transport_fw``SFX(t, p, delay);                                   \
   endfunction
 
+
+// pragma uvmf custom description_nb_target_socket begin
+// pragma uvmf custom description_nb_target_socket end
 
 `define uvm_tlm_nb_target_socket_decl(SFX)                              \
 class uvm_tlm_nb_target_socket``SFX #(type IMP=int                      \

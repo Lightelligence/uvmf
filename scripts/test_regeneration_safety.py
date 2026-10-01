@@ -22,7 +22,9 @@ from uvmf_gen import BaseGeneratorClass, UserError, UVMFCommandLineParser
 from uvmf_yaml.backup import backup
 from uvmf_yaml.obsolete import remove_obsolete_outputs
 from uvmf_yaml.regen import Merge, Parse
+from uvmf_yaml.custom_bazel import wrap_bazel_file
 from yaml2uvmf import DataClass
+import yaml2uvmf
 
 
 class RegenerationSafetyTest(unittest.TestCase):
@@ -267,6 +269,37 @@ class RegenerationSafetyTest(unittest.TestCase):
       self.assertEqual(old_file.read_text(encoding="utf-8"),"original content\n")
       self.assertEqual(list(old_root.glob("*.uvmf_merge_tmp")),[])
 
+  def test_merge_rejects_file_and_directory_destination_symlinks(self):
+    for directory_link in (False,True):
+      with self.subTest(directory_link=directory_link),tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        old_root,new_root = root / "old",root / "new"
+        old_root.mkdir()
+        new_root.mkdir()
+        target = old_root / "project_owned"
+        target.mkdir()
+        sentinel = target / "generated.sv"
+        sentinel.write_text("project-owned sentinel\n",encoding="utf-8")
+        link = old_root / ("src" if directory_link else "generated.sv")
+        try:
+          link.symlink_to(target if directory_link else sentinel,target_is_directory=directory_link)
+        except OSError as error:
+          self.skipTest("Symlinks unavailable: {}".format(error))
+        generated = new_root / "src" / "generated.sv" if directory_link else new_root / "generated.sv"
+        generated.parent.mkdir(exist_ok=True)
+        generated.write_text("generated replacement\n",encoding="utf-8")
+        parser = Parse(root=str(old_root),quiet=True)
+        parser.traverse_dir(str(old_root))
+        merge = Merge(str(old_root),False,str(new_root),str(old_root),quiet=True,defer_commit=True)
+        merge.load_data(parser.data)
+        try:
+          with self.assertRaisesRegex(UserError,"destination symlink"):
+            merge.traverse_dir(str(new_root))
+        finally:
+          merge.rollback()
+        self.assertEqual(sentinel.read_text(encoding="utf-8"),"project-owned sentinel\n")
+        self.assertTrue(link.is_symlink())
+
   def test_parser_accepts_legacy_multi_slash_pragma(self):
     with tempfile.TemporaryDirectory() as tmp:
       source = Path(tmp) / "register_model.sv"
@@ -438,6 +471,26 @@ class RegenerationSafetyTest(unittest.TestCase):
       self.assertTrue(all(path.is_file() for path in files))
       self.assertEqual(list(Path(tmp).glob(".uvmf_cleanup_backup_*")),[])
 
+  def test_cleanup_rollback_error_does_not_skip_merge_rollback(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config,output = root / "soc.yaml",root / "output"
+      config.write_text("uvmf:\n  environments:\n    soc: {}\n",encoding="utf-8")
+      original = output / "verification_ip" / "environment_packages" / "soc_env_pkg" / "src" / "soc_environment.sv"
+      original.parent.mkdir(parents=True)
+      original.write_text("original project content\n",encoding="utf-8")
+      before = {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()}
+      cleanup = mock.Mock()
+      cleanup.commit.side_effect = RuntimeError("injected cleanup commit failure")
+      cleanup.rollback.side_effect = RuntimeError("injected cleanup rollback failure")
+      arguments = ["yaml2uvmf.py",str(config),"-q","-d",str(output),"-g","environment:soc","--merge_source",str(output)]
+      with mock.patch.object(sys,"argv",arguments),mock.patch.object(yaml2uvmf,"remove_obsolete_outputs",return_value=cleanup):
+        with self.assertRaisesRegex(RuntimeError,"injected cleanup rollback failure"):
+          yaml2uvmf.run()
+      cleanup.rollback.assert_called_once_with()
+      after = {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()}
+      self.assertEqual(before,after)
+
   def test_skip_missing_block_applies_new_file(self):
     with tempfile.TemporaryDirectory() as tmp:
       root = Path(tmp)
@@ -485,6 +538,91 @@ class RegenerationSafetyTest(unittest.TestCase):
 
       self.assertIn('name = "new"',old_file.read_text(encoding="utf-8"))
       self.assertIn('simulator = "VCS"',old_file.read_text(encoding="utf-8"))
+
+  def test_legacy_bazel_merge_preserves_whole_file_without_nested_blocks(self):
+    for filename in ("BUILD","BUILD.bazel","custom.bzl"):
+      with self.subTest(filename=filename),tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        old_root,new_root = root / "old",root / "new"
+        old_root.mkdir()
+        new_root.mkdir()
+        old_file,new_file = old_root / filename,new_root / filename
+        legacy = (
+          'load(":project.bzl", "project_rule")\n'
+          '# pragma uvmf custom loads begin\n'
+          'load(":custom.bzl", "custom_rule")\n'
+          '# pragma uvmf custom loads end\n'
+          'project_rule(\n'
+          '    name = "user_owned_name",\n'
+          '    srcs = ["custom.sv"],\n'
+          '    # pragma uvmf custom deps_additional begin # legacy note\n'
+          '    deps = ["//user:dependency"],\n'
+          '    # pragma uvmf custom deps_additional end\n'
+          ')\n'
+          '# 用户改动 ‘UTF-8’ outside old slots\n'
+          'custom_rule(name = "extra")\n'
+        )
+        old_file.write_text(legacy,encoding="utf-8")
+        new_file.write_text(wrap_bazel_file('project_rule(name = "new_default")\n'),encoding="utf-8")
+        expected = wrap_bazel_file(legacy)
+        for attempt in range(2):
+          parser = Parse(root=str(old_root),quiet=True)
+          parser.traverse_dir(str(old_root))
+          merge = Merge(str(old_root),False,str(new_root),str(old_root),quiet=True)
+          merge.load_data(parser.data)
+          merge.traverse_dir(str(new_root))
+          self.assertEqual(old_file.read_text(encoding="utf-8"),expected)
+          self.assertFalse(merge.missing_blocks)
+          self.assertEqual(merge.preserved_bazel_files,[str(old_file.resolve())])
+          self.assertEqual(expected.count("pragma uvmf custom"),2)
+          for fragment in (
+            'load(":project.bzl", "project_rule")',
+            'load(":custom.bzl", "custom_rule")',
+            'name = "user_owned_name"',
+            'srcs = ["custom.sv"]',
+            'deps = ["//user:dependency"]',
+            '# 用户改动 ‘UTF-8’ outside old slots',
+            'custom_rule(name = "extra")',
+          ):
+            self.assertIn(fragment,old_file.read_text(encoding="utf-8"))
+          self.assertNotIn("new_default",old_file.read_text(encoding="utf-8"))
+
+  def test_empty_user_bazel_file_is_not_replaced_by_generated_defaults(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      old_root,new_root = root / "old",root / "new"
+      old_root.mkdir()
+      new_root.mkdir()
+      old_file,new_file = old_root / "BUILD",new_root / "BUILD"
+      old_file.write_text("",encoding="utf-8")
+      new_file.write_text(wrap_bazel_file('project_rule(name = "default")\n'),encoding="utf-8")
+      parser = Parse(root=str(old_root),quiet=True)
+      parser.traverse_dir(str(old_root))
+      merge = Merge(str(old_root),False,str(new_root),str(old_root),quiet=True)
+      merge.load_data(parser.data)
+      merge.traverse_dir(str(new_root))
+      self.assertEqual(old_file.read_text(encoding="utf-8"),wrap_bazel_file(""))
+
+  def test_bazel_upgrade_is_not_applied_when_another_file_merge_fails(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      old_root,new_root = root / "old",root / "new"
+      old_root.mkdir()
+      new_root.mkdir()
+      old_build,new_build = old_root / "BUILD",new_root / "BUILD"
+      legacy = 'project_rule(name = "original")\n'
+      old_build.write_text(legacy,encoding="utf-8")
+      new_build.write_text(wrap_bazel_file('project_rule(name = "default")\n'),encoding="utf-8")
+      (old_root / "z.sv").write_text("// pragma uvmf custom old begin\nuser content\n// pragma uvmf custom old end\n",encoding="utf-8")
+      (new_root / "z.sv").write_text("new content\n",encoding="utf-8")
+      parser = Parse(root=str(old_root),quiet=True)
+      parser.traverse_dir(str(old_root))
+      merge = Merge(str(old_root),False,str(new_root),str(old_root),quiet=True,defer_commit=True)
+      merge.load_data(parser.data)
+      with self.assertRaisesRegex(UserError,"Potential loss of hand edits"):
+        merge.traverse_dir(str(new_root))
+      self.assertEqual(old_build.read_text(encoding="utf-8"),legacy)
+      self.assertEqual(list(old_root.glob("*.uvmf_merge_tmp")),[])
 
   def test_testbench_build_merge_preserves_hand_dependencies_and_deduplicates_exact_generated_ones(self):
     for env_dependency in (

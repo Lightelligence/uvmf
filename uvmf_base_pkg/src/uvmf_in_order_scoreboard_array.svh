@@ -94,10 +94,11 @@ class uvmf_in_order_scoreboard_array #(
   // Transactions arrive through this interface from one or more predictors.
   // The transaction is stored in an analysis_fifo to wait for the actual transaction.
   function void write_expected(input T t);
-    if (scoreboard_enabled) begin : in_write_expected
+    if (scoreboard_enabled && enable_expected_port) begin : in_write_expected
       if (t.get_key() >= ARRAY_DEPTH) begin : expected_key_check
         `uvm_error("SCBD", $sformatf("Invalid key %d out of valid range between 0 and %d",
                                      t.get_key(), ARRAY_DEPTH))
+        return;
       end : expected_key_check
       super.write_expected(t);
       expected_results_q[t.get_key()].push_back(t);
@@ -110,12 +111,13 @@ class uvmf_in_order_scoreboard_array #(
   // next transaction in the analysis fifo that holds expected results.
   function void write_actual(input T t);
     T expected_transaction;
-    if (scoreboard_enabled) begin : in_write_actual
-      super.write_actual(t);
+    if (scoreboard_enabled && enable_actual_port) begin : in_write_actual
       if (t.get_key() >= ARRAY_DEPTH) begin : actual_key_check
         `uvm_error("SCBD", $sformatf("Invalid key %d out of valid range between 0 and %d",
                                      t.get_key(), ARRAY_DEPTH))
+        return;
       end : actual_key_check
+      super.write_actual(t);
 
       // Get next entry from analysis fifo.  Error if none exists
       if (expected_results_q[t.get_key()].size() == 0) begin : no_item_exists_in_selected_q

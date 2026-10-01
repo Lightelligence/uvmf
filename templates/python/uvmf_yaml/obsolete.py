@@ -145,6 +145,9 @@ def find_obsolete_outputs(root,bench_roots=None):
 
   obsolete_files = []
   for path in candidates:
+    # Check the lexical candidate before realpath erases symlink identity.
+    if os.path.islink(path):
+      continue
     path = _assert_within_root(root,path)
     if _is_proven_obsolete_file(
       path,os.path.normcase(os.path.abspath(path)) in exact_manifest
