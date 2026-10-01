@@ -11,19 +11,11 @@ import sys
 SOURCE_EXTENSIONS = {".sv", ".svh", ".v", ".vh", ".svp", ".vp"}
 
 EXCLUDED_FILES = {
-  "common/mgc_vip/ace/mgc_ace_hvl.svh",
-  "common/mgc_vip/axi/mgc_axi_hvl.svh",
-  "common/mgc_vip/axi4/mgc_axi4_hvl.svh",
-  "common/mgc_vip/axi4_v2/mgc_axi4_hvl.svh",
   "common/uvm_co_emulation_utilities/uvm_co-emulation_utilities/utils/reset/reset_ctrl_base.svh",
 }
 
 EXCLUDED_DIRS = (
-  "common/mgc_vip/",
-  "common/utility_packages/qvip_utils_pkg/",
-  "common/fli_pkg/",
   "common/uvm_co_emulation_utilities/",
-  "templates/qvip_configurator/",
 )
 
 

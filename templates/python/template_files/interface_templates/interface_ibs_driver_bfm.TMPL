@@ -45,16 +45,13 @@
 
 {% block contents %}
 import uvmf_base_pkg_hdl::*;
-{% if not veloceReady %}
+{% if not useStructBfm %}
 import {{name}}_pkg::*;
 {% endif %}
 
 {%if useDpiLink %}module{% else %}interface{% endif %} {{name}}_ibs_driver_bfm {{macro.paramDeclare(paramDefs)|indent(2)}}
   ({{name}}_if bus);
-{% if veloceReady %}
-  // The following pragma and additional ones in-lined further below are for running this BFM on Veloce
-  // pragma attribute {{name}}_driver_bfm partition_interface_xif
-{% endif %}
+
 {%if useDpiLink %}
   export "DPI-C" function configure;
   export "DPI-C" task     bfm_access;
@@ -124,9 +121,7 @@ import {{name}}_pkg::*;
 {%- endfor %}
 
   ) {% endif %} proxy;
-{% if veloceReady %}
-  // pragma tbx oneway proxy.my_function_name_in_uvm_driver
-{% endif %}
+
 
   // ****************************************************************************
   // Always block used to return signals to reset value upon assertion of reset
@@ -172,7 +167,7 @@ import {{name}}_pkg::*;
   // variables.
 
   function void configure(
-{% if veloceReady %}
+{% if useStructBfm %}
     uvmf_active_passive_t active_passive,
     uvmf_initiator_responder_t init_resp{% if configVars|length > 0 %},{% endif %}
 
@@ -180,13 +175,13 @@ import {{name}}_pkg::*;
     {{config.type}} {{config.name}}_arg{{macro.commalist(loop)}}
 {%- endfor %}
 
-    ); // pragma tbx xtf
+    );
 {% else %}
     {{name}}_configuration{{macro.paramUse(paramDefs)|indent(16)}}
        cfg
   );
 {% endif %}
-{% if veloceReady %}
+{% if useStructBfm %}
     initiator_responder = init_resp;
 {% for config in configVars %}
     {{config.name}} = {{config.name}}_arg;
@@ -321,7 +316,7 @@ import {{name}}_pkg::*;
   function void do_response_ready({% for txn in responseList %}
     input {{txn.type}} {{txn.name}} {{txn.unpackedDim}}{{macro.commalist(loop)}}
 {%- endfor %}
-    );  {% if veloceReady %}// pragma tbx xtf{% endif %}
+    );
 
 {% endif %}
     // UVMF_CHANGE_ME : Implement response - drive BFM outputs based on the arguments
@@ -355,11 +350,11 @@ import {{name}}_pkg::*;
     bit_vec_out = { {% for txn in transVars %}{{txn.name}}{{macro.commalist(loop)}}{% endfor %}};
 {% else %}
 
-  task access({% if veloceReady %}
+  task access({% if useStructBfm %}
 
 {% for txn in transVars %}
     {% if txn.name in responseVarNames %} output {% else %} input {% endif %}{{txn.type}} {{txn.name}} {{txn.unpackedDim}}{{macro.commalist(loop)}}
-{%- endfor %} ); // pragma tbx xtf
+{%- endfor %} );
 {% else %} {{name}}_transaction {%if paramDefs|length > 0%}#(
 {% for param in paramDefs %}       .{{param.name}}({{param.name}}){{macro.commalist(loop)}}
 {% endfor %}){% endif %}
@@ -367,7 +362,7 @@ import {{name}}_pkg::*;
 {% endif %}
     @(posedge {{clock}}_i);
     $display("{{name}}_driver_bfm: Inside access()");
-{% if veloceReady %}
+{% if useStructBfm %}
     do_transfer(
 {% for trans in transVars %}      {{trans.name}}{{macro.commalist(loop)}}
 {%- endfor %}
@@ -399,17 +394,17 @@ import {{name}}_pkg::*;
     bit_vec_out = { {% for txn in transVars %} {{txn.name}}{{macro.commalist(loop)}}{% endfor %}};
 {% else %}
   task response(
-{% if veloceReady %}
+{% if useStructBfm %}
 {% for txn in transVars %}
     output {{txn.type}} {{txn.name}} {{txn.unpackedDim}}{{macro.commalist(loop)}}
-{%- endfor %}  ); // pragma tbx xtf
+{%- endfor %}  );
 {% else %}
  {{name}}_transaction {{macro.paramUse(paramDefs)|indent(16)}}
           txn );
 {% endif %}
     @(posedge {{clock}}_i);
     $display("{{name}}_driver_bfm: Inside response()");
-{% if veloceReady %}
+{% if useStructBfm %}
     do_response(
 {% for trans in transVars %}      {{trans.name}}{{macro.commalist(loop)}}
 {%- endfor %}

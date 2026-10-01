@@ -695,7 +695,7 @@ class BaseGeneratorClass(BaseElementClass):
         ap = dest_dir+"/"+self.bench_location+"/"+self.name+"/yaml"
       else:
         ## Error somewhere.. either a new type of output has been defined or a typo exists somewhere
-        raise UserError("Internal error during YAML archive: \""+self.gen_type+"\" is not a recognized output type. Contact Siemens support")
+        raise UserError("Internal error during YAML archive: \""+self.gen_type+"\" is not a recognized output type")
       if (os.path.exists(ap) == False):
         ## YAML directory doesn't exist, create it
         os.makedirs(ap)
@@ -810,14 +810,6 @@ class NonUvmfComponentClass(BaseElementClass):
     for parameterName in parametersDict:
       self.parameters.append(ParameterValueClass(parameterName,parametersDict[parameterName]))
 
-class QvipMemoryAgentClass(BaseElementClass):
-  def __init__(self,name,type,qvipEnv,parametersDict):
-    super(QvipMemoryAgentClass,self).__init__(name)
-    self.type = type
-    self.qvipEnv=qvipEnv
-    self.parameters = []
-    for parameterName in parametersDict:
-      self.parameters.append(ParameterValueClass(parameterName,parametersDict[parameterName]))
 
 class AgentClass(BaseElementClass):
   def __init__(self,name,ifPkg,clk,rst,agentIndex,parametersDict,initResp='INITIATOR'):
@@ -832,7 +824,7 @@ class AgentClass(BaseElementClass):
       self.parameters.append(ParameterValueClass(parameterName,parametersDict[parameterName]))
 
 class RegModelClass(BaseElementClass):
-  def __init__(self,sequencer, transactionType, adapterType, busMap, useAdapter=True, useExplicitPrediction=True, vipType=False, qvipAgent=False,regModelPkg='',regBlockClass='',regBlockInstance=''):
+  def __init__(self,sequencer, transactionType, adapterType, busMap, useAdapter=True, useExplicitPrediction=True, vipType=False, vipAgent=False,regModelPkg='',regBlockClass='',regBlockInstance=''):
     super(RegModelClass,self).__init__('')
     self.useAdapter = useAdapter
     self.useExplicitPrediction = useExplicitPrediction
@@ -841,25 +833,25 @@ class RegModelClass(BaseElementClass):
     self.adapterType = adapterType
     self.busMap = busMap
     self.vipType = vipType
-    self.qvipAgent = qvipAgent
+    self.vipAgent = vipAgent
     self.regModelPkg = regModelPkg
     self.regBlockClass = regBlockClass
     self.regBlockInstance = regBlockInstance
 
 class analysisComponentClass(BaseElementClass):
-  def __init__(self,keyword,name,aeDict,apDict,qvipAeDict,parametersList):
+  def __init__(self,keyword,name,aeDict,apDict,vipAeDict,parametersList):
     super(analysisComponentClass,self).__init__(name)
     self.keyword = keyword
     self.analysisExports = []
     self.analysisPorts = []
-    self.qvipAnalysisExports = []
+    self.vipAnalysisExports = []
     self.parameters = []
     for aeName in aeDict:
       self.analysisExports.append(AnalysisExportClass(aeName,aeDict[aeName]))
     for apName in apDict:
       self.analysisPorts.append(AnalysisPortClass(apName,apDict[apName]))
-    for aeName in qvipAeDict:
-      self.qvipAnalysisExports.append(AnalysisExportClass(aeName,qvipAeDict[aeName]))
+    for aeName in vipAeDict:
+      self.vipAnalysisExports.append(AnalysisExportClass(aeName,vipAeDict[aeName]))
     for parameter in parametersList:
       try:
         self.parameters.append(ParamDef(parameter['name'],parameter['type'],parameter['value']))
@@ -891,14 +883,6 @@ class BfmPkgClass(BaseElementClass):
     self.ifPkg = ifPkg
     self.vipLibEnvVariable = vipLibEnvVariable
 
-class QvipAgentClass(BaseElementClass):
-  def __init__(self,name,ifPkg,activity,unique_id,unique_id_with_underscores,sequencer):
-    super(QvipAgentClass,self).__init__(name)
-    self.ifPkg = ifPkg
-    self.activity = activity
-    self.unique_id = unique_id
-    self.unique_id_with_underscores = unique_id_with_underscores
-    self.sequencer = sequencer
 
 class StringInterfaceNamesClass(BaseElementClass):
   def __init__(self,name,value,agent_name,ifPkg,activity,unique_id,unique_id_with_underscores):
@@ -952,63 +936,18 @@ class SubEnvironmentClass(BaseElementClass):
     for parameterName in parametersDict:
       self.parameters.append(ParameterValueClass(parameterName,parametersDict[parameterName]))
 
-class QvipSubEnvironmentClass(BaseElementClass):
-  def __init__(self,name,envPkg,numAgents,agent_index,agentList,envHasICVIP,envHasQVIP):
-    super(QvipSubEnvironmentClass,self).__init__(name)
-    self.envPkg = envPkg
-    self.envHasICVIP = envHasICVIP
-    self.envHasQVIP = envHasQVIP
-    self.agentList = agentList
-    self.numAgents = numAgents
-    self.agentMinIndex = agent_index
-    self.agentMaxIndex = agent_index+numAgents-1
-    self.qvip_if_name = []
-    for element in agentList:
-      self.qvip_if_name.append(element['name'])
 
-class QvipHdlModuleClass(BaseElementClass):
-  def __init__(self,name,envPkg,unique_id,unique_id_with_underscores):
-    super(QvipHdlModuleClass,self).__init__(name)
-    self.envPkg = envPkg
-    self.unique_id = unique_id
-    self.unique_id_with_underscores = unique_id_with_underscores
-    self.agent_names = []
-    self.agent_activities = {}
-    self.agent_types = []
 
-class QvipFileListClass(BaseElementClass):
-  def __init__(self,name,envPkg,agent_type):
-    super(QvipFileListClass,self).__init__(name)
-    self.envPkg = envPkg
-    self.env_var = str(envPkg).upper()+"_DIR_NAME"
-    self.agent_types = []
-    self.agent_types.append(str(agent_type))
 
-class QvipConnectionClass(object):
-  def __init__(self, output_component, output_port_name, input_component, input_component_export_name, validate):
-    self.output_component = output_component
-    self.output_port_name = output_port_name
-    self.input_component = input_component
-    self.input_component_export_name = input_component_export_name
-    self.validate = validate
 
-class QvipAPClass(BaseElementClass):
-  def __init__(self,name,agent):
-    super(QvipAPClass,self).__init__(name)
-    self.agent = agent
 
-class VmapClass(BaseElementClass):
-  def __init__(self,name,dirName):
-    super(VmapClass,self).__init__(name)
-    self.dirName = dirName
 
 class AnalysisExportClass(BaseElementClass):
-  def __init__(self,name,tType,connection="",QVIPConn=False,memberConnection=None):
+  def __init__(self,name,tType,connection="",memberConnection=None):
     super(AnalysisExportClass,self).__init__(name)
     self.tType = tType
     self.connection = connection
     self.memberConnection = connection if memberConnection is None else memberConnection
-    self.QVIPConn = QVIPConn
 
 class AnalysisPortClass(BaseElementClass):
   def __init__(self,name,tType,connection="",memberConnection=None):
@@ -1063,7 +1002,7 @@ class InterfaceClass(BaseGeneratorClass):
     self.transVars = []
     self.transVarsConstraints = []
     self.configVarsConstraints = []
-    self.veloceReady = True
+    self.useStructBfm = True
     self.configVars = []
     self.responseOperation = '1\'b1'
     self.responseList = []
@@ -1081,7 +1020,7 @@ class InterfaceClass(BaseGeneratorClass):
     template['inputPorts'] = self.getInputPorts()
     template['outputPorts'] = self.getOutputPorts()
     template['inoutPorts'] = self.getInoutPorts()
-    template['veloceReady'] = self.veloceReady
+    template['useStructBfm'] = self.useStructBfm
     template['configVars'] = self.configVars
     template['hdlTypedefs'] = self.hdlTypedefs
     template['paramDefs'] = self.paramDefs
@@ -1231,7 +1170,7 @@ class InterfaceClass(BaseGeneratorClass):
              "responseList":self.responseList,
              "responseVarNames":self.responseVarNames,
              "useDpiLink":self.useDpiLink,
-             "veloceReady":self.veloceReady,
+             "useStructBfm":self.useStructBfm,
              "clock":self.clock,
              "reset":self.reset,
              "resetAssertionLevel":self.resetAssertionLevel,
@@ -1256,22 +1195,15 @@ class EnvironmentClass(BaseGeneratorClass):
     self.typedefs = []
     self.regModels = []
     self.nonUvmfComponents = []
-    self.qvipMemoryAgents = []
     self.agents = []
-    self.qvip_agents = []
     self.external_imports = []
     self.agentIndex = 0
     self.subEnvironments = []
     self.subEnvironmentRegPackages = []
-    self.qvipSubEnvironments = []
-    self.qvipConnections = []
-    self.qvip_ap_names = []
     self.agent_packages = []
-    self.qvip_agent_packages = []
     self.sub_env_packages = []
     self.planned_interface_packages = set()
     self.planned_environment_packages = set()
-    self.qvip_sub_env_packages = []
     self.analysisComponents = []
     self.analysisComponentTypes = []
     self.analysisPorts = []
@@ -1298,11 +1230,7 @@ class EnvironmentClass(BaseGeneratorClass):
     template['regModels'] = self.regModels;
     template['is_top_env'] = self.is_top_env
     template['nonUvmfComponents'] = self.nonUvmfComponents
-    template['qvipMemoryAgents'] = self.qvipMemoryAgents
-    template['vipMemoryAgents'] = self.qvipMemoryAgents
     template['agents'] = self.agents
-    template['qvip_agents'] = self.qvip_agents
-    template['vip_agents'] = self.qvip_agents
     template['external_imports'] = self.external_imports
     template['paramDefs'] = self.paramDefs
     template['configVariableValues'] = self.configVariableValues
@@ -1311,18 +1239,8 @@ class EnvironmentClass(BaseGeneratorClass):
     template['hasAddressedSubmodels'] = any(subenv.regModelPkg is not None and subenv.baseAddress is not None for subenv in self.subEnvironments)
     template['hasArraySubEnvironments'] = any(subenv.isArray for subenv in self.subEnvironments)
     template['subEnvironmentRegPackages'] = self.subEnvironmentRegPackages
-    template['qvipSubEnvironments'] = self.qvipSubEnvironments
-    template['vipSubEnvironments'] = self.qvipSubEnvironments
-    template['qvipConnections'] = self.qvipConnections
-    template['vipConnections'] = self.qvipConnections
-    template['qvip_ap_names'] = self.qvip_ap_names
-    template['vip_ap_names'] = self.qvip_ap_names
     template['agent_pkgs'] = self.agent_packages
-    template['qvip_agent_pkgs'] = self.qvip_agent_packages
-    template['vip_agent_pkgs'] = self.qvip_agent_packages
     template['env_pkgs'] = self.sub_env_packages
-    template['qvip_env_pkgs'] = self.qvip_sub_env_packages
-    template['vip_env_pkgs'] = self.qvip_sub_env_packages
     template['analysisComponents'] = self.analysisComponents
     template['acTypes'] = self.acTypes
     template['scoreboards'] = self.scoreboards
@@ -1383,12 +1301,7 @@ class EnvironmentClass(BaseGeneratorClass):
     """Add an agent instantiation to the definition of this environment class"""
     self.nonUvmfComponents.append(NonUvmfComponentClass(name,type,parametersDict))
 
-  def addQvipMemoryAgent(self,name,type,qvipEnv,parametersDict={}):
-    """Add an agent instantiation to the definition of this environment class"""
-    self.qvipMemoryAgents.append(QvipMemoryAgentClass(name,type,qvipEnv,parametersDict))
 
-  def addVipMemoryAgent(self,name,type,vipEnv,parametersDict={}):
-    self.addQvipMemoryAgent(name,type,vipEnv,parametersDict)
 
   def addAgent(self,name,ifPkg,clk,rst,parametersDict={},initResp='INITIATOR'):
     """Add an agent instantiation to the definition of this environment class"""
@@ -1415,20 +1328,7 @@ class EnvironmentClass(BaseGeneratorClass):
     if (regModelPkg != None and regModelPkg not in self.subEnvironmentRegPackages):
       self.subEnvironmentRegPackages.append(regModelPkg)
 
-  def addQvipSubEnv(self,name,envPkg,agentList,envHasICVIP,envHasQVIP):
-    """Add a sub environment instantiation to the definition of this environment class"""
-    self.numAgents = agentList.__len__()
-    self.qvipSubEnvironments.append(QvipSubEnvironmentClass(name,envPkg,self.numAgents,self.agentIndex,agentList,envHasICVIP,envHasQVIP))
-    # line below updates agentIndex after appending info to qvip_if_name array
-    self.agentIndex = self.agentIndex+self.numAgents
-    if (envPkg not in self.qvip_sub_env_packages):
-      self.qvip_sub_env_packages.append(envPkg)
-    for element in agentList:
-      if element['type'] == 'vip':
-        self.qvip_ap_names.append(QvipAPClass(name,element['name']))
 
-  def addVipSubEnv(self,name,envPkg,agentList,envHasICVIP,envHasQVIP):
-    self.addQvipSubEnv(name,envPkg,agentList,envHasICVIP,envHasQVIP)
 
   def addAnalysisPort(self,name,tType,connection="",memberConnection=None):
     """Build and connect an analysis port connection of the given name and transaction type"""
@@ -1438,12 +1338,7 @@ class EnvironmentClass(BaseGeneratorClass):
     """Build and connect an analysis export connection of the given name and transaction type"""
     self.analysis_exports.append(AnalysisExportClass(name,tType,connection,memberConnection=memberConnection))
 
-  def addQvipConnection(self, output_component, output_port_name, input_component, input_component_export_name,validate=True):
-    """Add a Qvip Connection for the environment package"""
-    self.qvipConnections.append(QvipConnectionClass(output_component, output_port_name, input_component, input_component_export_name,validate))
 
-  def addVipConnection(self, output_component, output_port_name, input_component, input_component_export_name,validate=True):
-    self.addQvipConnection(output_component, output_port_name, input_component, input_component_export_name,validate)
 
   def addImpDecl(self,name):
     """Add an impDecl call for this environment package"""
@@ -1463,25 +1358,25 @@ class EnvironmentClass(BaseGeneratorClass):
     """Add a constraint to the config class's Constraint item definition"""
     self.configVarsConstraints.append(ConstraintsClass(name,type,comment))
 
-  def defineAnalysisComponent(self,keyword,name,exportDict,portDict,qvipExportDict={},parametersList=[]):
+  def defineAnalysisComponent(self,keyword,name,exportDict,portDict,vipExportDict={},parametersList=[]):
     """Defines a type of analysis component for use later on."""
     ## Register the desired analysis component on the types array
-    self.analysisComponentTypes.append(analysisComponentClass(keyword,name,exportDict,portDict,qvipExportDict,parametersList))
+    self.analysisComponentTypes.append(analysisComponentClass(keyword,name,exportDict,portDict,vipExportDict,parametersList))
     self.addAnalysisComponentType(name)
     ## Add any non-existent imp-decl calls based on contents of the aeDict
     for aeName in exportDict:
       self.addImpDecl(aeName)
-    for aeName in qvipExportDict:
+    for aeName in vipExportDict:
       self.addImpDecl(aeName)
 
-  def addRegisterModel(self,sequencer, transactionType, adapterType, busMap, useAdapter=True, useExplicitPrediction=True, vipType="uvmf",qvipAgent=False,regModelPkg=None,regBlockClass=None,regBlockInstance=''):
+  def addRegisterModel(self,sequencer, transactionType, adapterType, busMap, useAdapter=True, useExplicitPrediction=True, vipType="uvmf",vipAgent=False,regModelPkg=None,regBlockClass=None,regBlockInstance=''):
     """Adds a register model to the environment."""
     if ( regBlockInstance == ''):
       regBlkInst = self.name+"_rm"
     else:
       regBlkInst = regBlockInstance
     ## Register the desired analysis component on the types array
-    self.regModels.append(RegModelClass(sequencer,transactionType,adapterType, busMap,useAdapter,useExplicitPrediction,vipType,qvipAgent,regModelPkg,regBlockClass,regBlkInst))
+    self.regModels.append(RegModelClass(sequencer,transactionType,adapterType, busMap,useAdapter,useExplicitPrediction,vipType,vipAgent,regModelPkg,regBlockClass,regBlkInst))
 
   # addAnalysisComponent(instanceName, analysisComponentType)
   def addAnalysisComponent(self, name, pType, parametersList=[],extDef=False):
@@ -1516,8 +1411,7 @@ class EnvironmentClass(BaseGeneratorClass):
                                                      "env_name":self.name,
                                                      "exports":analysisComp.analysisExports,
                                                      "ports":analysisComp.analysisPorts,
-                                                     "qvip_exports":analysisComp.qvipAnalysisExports,
-                                                     "vip_exports":analysisComp.qvipAnalysisExports,
+                                                                                                          "vip_exports":analysisComp.vipAnalysisExports,
                                                      "parameters":analysisComp.parameters,
                                                       })
     for regModel in self.regModels:
@@ -1567,16 +1461,9 @@ class BenchClass(BaseGeneratorClass):
     self.scoreboards = []
     self.bfm_packages = []
     self.bfm_pkg_env_variables = []
-    self.qvip_pkg_file_lists = []
     self.vipLibEnvVariableNames = []
-    self.qvip_bfms = []
-    self.qvip_bfm_packages = []
     self.vip_packages = []
-    self.qvip_hdl_modules = []
-    self.qvip_hdl_module_list = []
-    self.qvip_pkg_env_variables = []
     self.resource_parameter_names = []
-    self.veloceReady = True
     self.useCoEmuClkRstGen = False
     self.clockHalfPeriod = '5ns'
     self.clockPhaseOffset = '9ns'
@@ -1592,12 +1479,8 @@ class BenchClass(BaseGeneratorClass):
     self.regModelPkg = ''
     self.regBlockClass = ''
     self.regBlockInstance = env_name+"_rm"
-    self.using_qvip = False
-    self.using_vip = False
     self.bench_plusargs = []
     self.used_uvmf_envs = []
-    self.used_qvip_envs = []
-    self.used_vip_envs = []
     for parameterName in parametersDict:
       self.envParamDefs.append(ParameterValueClass(parameterName,parametersDict[parameterName]))
     self.dest_dir_override = None
@@ -1610,19 +1493,8 @@ class BenchClass(BaseGeneratorClass):
     template['scoreboards'] = self.scoreboards
     template['bfm_pkgs'] = self.bfm_packages
     template['bfm_pkg_env_variables'] = self.bfm_pkg_env_variables
-    template['qvip_pkg_file_lists'] = self.qvip_pkg_file_lists
-    template['vip_pkg_file_lists'] = self.qvip_pkg_file_lists
     template['vipLibEnvVariableNames'] = self.vipLibEnvVariableNames
-    template['qvip_bfms'] = self.qvip_bfms
-    template['vip_bfms'] = self.qvip_bfms
-    template['qvip_hdl_modules'] = self.qvip_hdl_modules
-    template['vip_hdl_modules'] = self.qvip_hdl_modules
-    template['qvip_bfm_pkgs'] = self.qvip_bfm_packages
-    template['vip_bfm_pkgs'] = self.qvip_bfm_packages
     template['vip_packages'] = self.vip_packages
-    template['qvip_pkg_env_variables'] = self.qvip_pkg_env_variables
-    template['vip_pkg_env_variables'] = self.qvip_pkg_env_variables
-    template['veloceReady'] = self.veloceReady
     template['useCoEmuClkRstGen'] = self.useCoEmuClkRstGen
     template['clockHalfPeriod'] = self.clockHalfPeriod
     template['clockPhaseOffset'] = self.clockPhaseOffset
@@ -1640,19 +1512,13 @@ class BenchClass(BaseGeneratorClass):
     template['regBlockClass'] = self.regBlockClass
     template['regBlockInstance'] = self.regBlockInstance
     template['svLibNames'] = self.svLibNames
-    template['using_qvip'] = self.using_qvip
-    template['using_vip'] = self.using_vip or self.using_qvip
     template['bench_plusargs'] = self.bench_plusargs
     template['usedUvmfEnvs'] = self.used_uvmf_envs
-    template['usedQvipEnvs'] = self.used_qvip_envs
-    template['usedVipEnvs'] = self.used_vip_envs if len(self.used_vip_envs) else self.used_qvip_envs
     return template
 
   ## Overload of the create function - insert some conditional considerations
   def create(self,desired_template='all',parser=None,archive_yaml=True):
     """Bench class specific create function - allows for the production of conditional files"""
-    if (self.using_qvip or self.using_vip) and ('need_overlay' not in self.conditional_array):
-      self.conditional_array.append('need_overlay')
     super(BenchClass,self).create(desired_template,parser,archive_yaml=archive_yaml)
 
   def addVinfoDependency(self,name):
@@ -1664,9 +1530,6 @@ class BenchClass(BaseGeneratorClass):
     if (name not in self.external_imports):
       self.external_imports.append(name)
 
-  def addVmap(self,name,dirName):
-    """Add a vmap command to bench makefile"""
-    self.vmaps.append(VmapClass(name,dirName))
 
   def addBfm(self,name,ifPkg,clk,rst,activity,parametersDict={},sub_env_path='environment',initResp='INITIATOR',vipLibEnvVariable='UVMF_VIP_LIBRARY_HOME',agentInstName='agent_inst_name',portList=[]):
     """Add a BFM instantiation to the definition of this bench class"""
@@ -1681,50 +1544,7 @@ class BenchClass(BaseGeneratorClass):
       if (vipLibEnvVariable not in self.vipLibEnvVariableNames):
         self.vipLibEnvVariableNames.append(vipLibEnvVariable)
 
-  def addQvipBfm(self,name,ifPkg,activity,unique_id="",sequencer="",vipPkg="",vipType=""):
-    """Instantiate the qvip BFMs to the definition of this bench class"""
-    package_name=name
-    value_name=name
-    unique_id_with_underscores=""
-    unique_id_no_dots = unique_id.split(".")
-    first=1
-    for segment in unique_id_no_dots:
-      if (first==1):
-        unique_id_with_underscores = segment
-        first = 0
-      else:
-        unique_id_with_underscores = unique_id_with_underscores+"_"+segment
-    self.resource_parameter_names.append(StringInterfaceNamesClass(package_name,value_name,name,ifPkg,activity,unique_id,unique_id_with_underscores))
-    self.qvip_bfms.append(QvipAgentClass(name,ifPkg,activity,unique_id,unique_id_with_underscores,sequencer))
-    if (vipPkg not in self.vip_packages):
-      self.vip_packages.append(vipPkg)
-    if (ifPkg not in self.qvip_bfm_packages):
-      self.qvip_bfm_packages.append(ifPkg)
-      self.qvip_pkg_env_variables.append(str(ifPkg).upper())    ## PYTHON3
-      self.qvip_pkg_file_lists.append(QvipFileListClass(name,ifPkg,vipType))
-    else:
-      for qvip_icvip_pkg in self.qvip_pkg_file_lists:
-        if ( ifPkg == qvip_icvip_pkg.envPkg):
-          if (vipType not in qvip_icvip_pkg.agent_types):
-            qvip_icvip_pkg.agent_types.append(str(vipType))
-    if (unique_id not in self.qvip_hdl_module_list):
-      self.qvip_hdl_module_list.append(unique_id)
-      self.qvip_hdl_modules.append(QvipHdlModuleClass(name,ifPkg,unique_id,unique_id_with_underscores))
-    for hdl_module in self.qvip_hdl_modules:
-      if unique_id_with_underscores == hdl_module.unique_id_with_underscores:
-        hdl_module.agent_names.append(str(name).upper())       ## PYTHON3
-        if (vipType not in hdl_module.agent_types):
-          hdl_module.agent_types.append(str(vipType))
-        hdl_module.agent_activities.update({(str(name).upper()):activity})
-    self.using_qvip = True
-    self.using_vip = True
-    if 'using_qvip' not in self.conditional_array:
-      self.conditional_array.append('using_qvip')
-    if 'using_vip' not in self.conditional_array:
-      self.conditional_array.append('using_vip')
 
-  def addVipBfm(self,name,ifPkg,activity,unique_id="",sequencer="",vipPkg="",vipType=""):
-    self.addQvipBfm(name,ifPkg,activity,unique_id,sequencer,vipPkg,vipType)
 
   def addTopLevel(self,topName):
     """Add additional top-level module for simulation"""

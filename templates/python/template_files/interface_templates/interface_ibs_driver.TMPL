@@ -33,7 +33,7 @@ class {{name}}_ibs_driver {{macro.paramDeclare(paramDefs)|indent(8)}} extends {{
 // ****************************************************************************
   virtual function void configure(input CONFIG_T cfg);
     bfm.configure(
-{% if veloceReady %}
+{% if useStructBfm %}
       cfg.active_passive,
       cfg.initiator_responder{% if configVars|length > 0 %},{% endif %}
 
@@ -61,7 +61,7 @@ class {{name}}_ibs_driver {{macro.paramDeclare(paramDefs)|indent(8)}} extends {{
         );
       end
       bfm.response(
-{% if veloceReady %}
+{% if useStructBfm %}
 {% for trans in transVars %}        txn.{{trans.name}}{{macro.commalist(loop)}}
 {%- endfor %}
 {% else %}
@@ -70,7 +70,7 @@ class {{name}}_ibs_driver {{macro.paramDeclare(paramDefs)|indent(8)}} extends {{
       );
     end else begin
       bfm.access(
-{% if veloceReady %}
+{% if useStructBfm %}
 {% for trans in transVars %}        txn.{{trans.name}}{{macro.commalist(loop)}}
 {%- endfor %}
 {% else %}

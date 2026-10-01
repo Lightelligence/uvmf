@@ -15,7 +15,7 @@ interface cpu_pc_monitor_bfm #(
     input [31:0] r5_in,
     input [31:0] pc_in
 );
-  // pragma attribute cpu_pc_monitor_bfm partition_interface_xif
+
 
   //---------------------------------------------------------------------------
   // Declarations
@@ -57,7 +57,7 @@ interface cpu_pc_monitor_bfm #(
   // Tasks to talk to the proxy
   //---------------------------------------------------------------------------
   // Set trigger values and enables
-  function void set_pc_triggers(packed_pc_trigger_buf_t triggers_to_find);  // pragma tbx xtf
+  function void set_pc_triggers(packed_pc_trigger_buf_t triggers_to_find);
     int unsigned ti;
     packed_pc_trigger_s new_trigger;
 

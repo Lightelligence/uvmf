@@ -23,25 +23,10 @@
 module hdl_top;
 
   import {{name}}_parameters_pkg::*;
-{% for agent in qvip_bfm_pkgs %}
-  import {{agent}}_params_pkg::*;
-{% endfor %}
   import uvmf_base_pkg_hdl::*;
 
-{% if veloceReady %}
-  // pragma attribute hdl_top partition_module_xrtl
-{% endif %}
-{% for qvip_hdl in qvip_hdl_modules %}
-  hdl_{{qvip_hdl.envPkg}}
-      #(
-{% for agent_name in qvip_hdl.agent_names %}
-        .{{agent_name}}_ACTIVE({% if qvip_hdl.agent_activities[agent_name]=='ACTIVE' %}1{% else %}0{% endif %}),
-{% endfor %}
-        .UNIQUE_ID("{{qvip_hdl.unique_id}}")
-        /*.EXT_CLK_RESET(0)*/
-       ) {{qvip_hdl.unique_id_with_underscores}}qvip_hdl();
 
-{% endfor %}
+
 {% if useCoEmuClkRstGen %}
   wire rst;
   wire clk;
@@ -54,9 +39,7 @@ module hdl_top;
   // pragma uvmf custom clock_generator begin
   bit clk;
   // Instantiate a clk driver
-{% if veloceReady %}
-  // tbx clkgen
-{% endif %}
+
   initial begin
     clk = 0;
     #{{ clockPhaseOffset }};
@@ -70,9 +53,7 @@ module hdl_top;
   // pragma uvmf custom reset_generator begin
   bit rst;
   // Instantiate a rst driver
-{% if veloceReady %}
-  // tbx clkgen
-{% endif %}
+
   initial begin
     rst = {% if resetAssertionLevel %}1{% else %}0{% endif %};
     #{{ resetDuration }};
@@ -109,7 +90,7 @@ module hdl_top;
   // Instantiate your DUT here
   // pragma uvmf custom dut_instantiation end
 
-  initial begin{% if veloceReady %}  // tbx vif_binding_block{% endif %}
+  initial begin
     import uvm_pkg::uvm_config_db;
 {% if useDpiLink %}
 {% else %}

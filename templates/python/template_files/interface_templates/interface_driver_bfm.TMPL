@@ -53,7 +53,7 @@
 
 {% block contents %}
 import uvmf_base_pkg_hdl::*;
-{% if veloceReady %}
+{% if useStructBfm %}
 `include "{{src_dir}}{{name}}_macros.svh"
 {% else %}
 import {{name}}_pkg::*;
@@ -61,12 +61,8 @@ import {{name}}_pkg::*;
 
 {%if useDpiLink %}module{% else %}interface{% endif %} {{name}}_driver_bfm {{macro.paramDeclare(paramDefs)|indent(2)}}
   ({{name}}_if bus);
-{% if veloceReady %}
-  // The following pragma and additional ones in-lined further below are for running this BFM on Veloce
-  // pragma attribute {{name}}_driver_bfm partition_interface_xif
-{% endif %}
 
-`ifndef XRTL
+
 // This code is to aid in debugging parameter mismatches between the BFM and its corresponding agent.
 // Enable this debug by setting UVM_VERBOSITY to UVM_DEBUG
 // Setting UVM_VERBOSITY to UVM_DEBUG causes all BFM's and all agents to display their parameter settings.
@@ -89,7 +85,7 @@ initial begin : bfm_vs_agent_parameter_debug
       {% endif %}
       , UVM_DEBUG)
 end
-`endif
+
 
 {%if useDpiLink %}
   export "DPI-C" function configure;
@@ -156,11 +152,9 @@ end
 
   // Proxy handle to UVM driver
   {{name}}_pkg::{{name}}_driver {{macro.paramUse(paramDefs)|indent(4)}}  proxy;
-{% if veloceReady %}
-  // pragma tbx oneway proxy.my_function_name_in_uvm_driver
-{% endif %}
 
-{% if veloceReady %}
+
+{% if useStructBfm %}
   // ****************************************************************************
   // ****************************************************************************
   // Macros that define structs located in {{name}}_macros.svh
@@ -227,8 +221,8 @@ end
 {% endfor %}
     } = bit_vec_in;
 {% else %}
-{% if veloceReady %}
-  function void configure({{name}}_configuration_s {{name}}_configuration_arg); // pragma tbx xtf
+{% if useStructBfm %}
+  function void configure({{name}}_configuration_s {{name}}_configuration_arg);
 {% else %}
   function void configure({{name}}_configuration
                          {{macro.paramList(paramDefs,"                         ")}}
@@ -247,7 +241,7 @@ end
 // pragma uvmf custom initiate_and_get_response begin
 // ****************************************************************************
 // UVMF_CHANGE_ME
-{% if veloceReady %}
+{% if useStructBfm %}
 // This task is used by an initator.  The task first initiates a transfer then
 // waits for the responder to complete the transfer.
     task initiate_and_get_response(
@@ -258,7 +252,7 @@ end
        // This argument is used to send data received from the responder
        // back to the sequence item.  The sequence item is returned to the sequence.
        output {{name}}_responder_s {{name}}_responder_struct
-       );{% if veloceReady %}// pragma tbx xtf {% endif %}
+       );
 
        // Members within the {{name}}_initiator_struct:
 {% for txn in transVars %}
@@ -338,14 +332,14 @@ end
     @(posedge {{clock}}_i);
     @(posedge {{clock}}_i);
     // Wait for the responder to complete the transfer then place the responder data into
-{% if veloceReady %}
+{% if useStructBfm %}
     // {{name}}_responder_struct.
 {% else %}
     // initiator_trans.
 {% endif %}
     @(posedge {{clock}}_i);
     @(posedge {{clock}}_i);
-{% if veloceReady %}
+{% if useStructBfm %}
     responder_struct = {{name}}_responder_struct;
 {% endif %}
   endtask
@@ -361,7 +355,7 @@ bit first_transfer=1;
 // UVMF_CHANGE_ME
 // This task is used by a responder.  The task first completes the current
 // transfer in progress then waits for the initiator to start the next transfer.
-{% if veloceReady %}
+{% if useStructBfm %}
   task respond_and_wait_for_next_transfer(
        // This argument is used to send data received from the initiator
        // back to the sequence item.  The sequence determines how to respond.
@@ -369,7 +363,7 @@ bit first_transfer=1;
        // This argument passes transaction variables used by a responder
        // to complete a protocol transfer.  The values come from a sequence item.
        input {{name}}_responder_s {{name}}_responder_struct
-       );{% if veloceReady %}// pragma tbx xtf {% endif %}
+       );
   // Variables within the {{name}}_initiator_struct:
 {% for txn in transVars %}
   //   {{txn.type}} {{txn.name}} {{txn.unpackedDim}};
@@ -442,7 +436,7 @@ bit first_transfer=1;
   @(posedge {{clock}}_i);
   if (!first_transfer) begin
     // Perform transfer response here.
-{% if veloceReady %}
+{% if useStructBfm %}
     // Reply using data recieved in the {{name}}_responder_struct.
 {% else %}
     // Reply using data recieved in the responder_trans.
@@ -452,7 +446,7 @@ bit first_transfer=1;
     @(posedge {{clock}}_i);
   end
     // Wait for next transfer then gather info from intiator about the transfer.
-{% if veloceReady %}
+{% if useStructBfm %}
     // Place the data into the {{name}}_initiator_struct.
 {% else %}
     // Place the data into the responder_trans handle.

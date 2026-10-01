@@ -133,6 +133,7 @@ class BenchValidator(BaseValidator):
     }
     mainSchema = {
       Required('top_env'): str,
+      # Input-only compatibility marker; bench transport is chosen per interface.
       Optional('veloce_ready'): Any('True','False'),
       Optional('existing_library_component'): Any('True','False'),
       Optional('clock_half_period'): str,
@@ -372,6 +373,7 @@ class InterfaceValidator(BaseValidator):
       Optional('config_constraints'): [ self.constraintSchema ],
       Optional('imports'): [ self.importSchema ],
       Optional('veloce_ready'): Any("True","False"),
+      Optional('use_struct_bfm'): Any("True","False"),
       Optional('infact_ready'): 'False',
       Optional('dpi_define'): self.dpiDefSchema,
       Optional('enable_functional_coverage'): Any("True","False"),

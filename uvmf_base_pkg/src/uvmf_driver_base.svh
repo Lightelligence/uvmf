@@ -72,9 +72,6 @@ class uvmf_driver_base #(
   // Static associative array of back-references to instances derived from
   // this UVMF driver class, from corresponding driver HDL BFM instances
   // as referenced by the 'bfm' field
-`ifdef QUESTA
-  static uvmf_driver_base_t bfm_proxy_map[BFM_BIND_T];
-`endif  // QUESTA
 
   // Event used to communicate with BFM when configured to operate in RESPONDER mode
   event new_responder_transaction;
@@ -96,9 +93,6 @@ class uvmf_driver_base #(
       `uvm_fatal("DRV", $sformatf(
                  "BFM handle with interface_name %s is null", configuration.interface_name));
     end
-`ifdef QUESTA
-    bfm_proxy_map[bfm] = this;
-`endif  // QUESTA
     set_bfm_proxy_handle();
     configure(configuration);
   endfunction

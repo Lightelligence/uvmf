@@ -4,7 +4,7 @@ interface clock_bfm #(
 ) (
     output logic clock
 );
-  // pragma attribute clock_bfm partition_interface_xif
+
 
   timeunit 1ps; timeprecision 1ps;
 
@@ -19,7 +19,7 @@ interface clock_bfm #(
 
   /* Note: Optimizations can be applied to remove negative edges and/or positive
            edges when looking at performance. */
-  //tbx clkgen
+
   initial begin
     internal_clock = 0;
     #(PHASE_OFFSET_IN_PS);  //Can not be a variable and can not be 0
@@ -38,7 +38,7 @@ interface clock_bfm #(
   bit        en;
 
 
-  function void update_half_period_in_ps(int unsigned half_period);  // pragma tbx xtf
+  function void update_half_period_in_ps(int unsigned half_period);
     if (half_period > 0) begin
       hp = half_period;
       ->update_clk_hp;
@@ -54,15 +54,15 @@ interface clock_bfm #(
     proxy.half_period_updated(hp);
   end
 
-  function int unsigned get_half_period_in_ps();  // pragma tbx xtf
+  function int unsigned get_half_period_in_ps();
     return half_period_in_ps;
   endfunction : get_half_period_in_ps
 
-  function int unsigned get_phase_offset_in_ps();  // pragma tbx xtf
+  function int unsigned get_phase_offset_in_ps();
     return PHASE_OFFSET_IN_PS;
   endfunction : get_phase_offset_in_ps
 
-  function void update_clock_enable(bit enable);  // pragma tbx xtf
+  function void update_clock_enable(bit enable);
     en = enable;
 
     $display("enable: %0d", enable);
@@ -86,7 +86,7 @@ interface clock_bfm #(
   event                                                               initiateAdvance;
   clock_pkg::clock_ctrl #(INIT_CLOCK_HALF_PERIOD, PHASE_OFFSET_IN_PS) proxy;
 
-  function void advance_clocks(int unsigned numClocksArg);  // pragma tbx xtf
+  function void advance_clocks(int unsigned numClocksArg);
     numClocks  = numClocksArg;
     cycleCount = 1;
     ->initiateAdvance;

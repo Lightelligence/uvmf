@@ -7,7 +7,7 @@ interface sync_reset_bfm #(
     input  bit   clock,
     output logic reset
 );
-  // pragma attribute sync_reset_bfm partition_interface_xif
+
 
   timeunit 1ps; timeprecision 1ps;
 
@@ -55,7 +55,7 @@ interface sync_reset_bfm #(
   //Reset Interaction Code
 
 
-  function void toggle_reset(int idle_cycles, int num_clks_active);  // pragma tbx xtf
+  function void toggle_reset(int idle_cycles, int num_clks_active);
     if (reset == RESET_POLARITY)
       $warning("Reset Active when %m.toggle_reset() called.  This invocation will be ignored.");
     else if (manual_control == 1)
@@ -69,22 +69,22 @@ interface sync_reset_bfm #(
     end
   endfunction : toggle_reset
 
-  function void assert_reset();  // pragma tbx xtf
+  function void assert_reset();
     manual_control = 1;
     ->initiate_toggle;
   endfunction : assert_reset
 
-  function void deassert_reset();  // pragma tbx xtf
+  function void deassert_reset();
     manual_control = 0;
     ->initiate_toggle;
   endfunction : deassert_reset
 
-  function void configure(int idle_cycles, int num_clks_active);  // pragma tbx xtf
+  function void configure(int idle_cycles, int num_clks_active);
     if (idle_cycles >= 0) initial_idle_cycles = idle_cycles;
     if (num_clks_active >= 0) reset_active_cycles = num_clks_active;
   endfunction : configure
 
-  function void set_manual_control(bit mc);  // pragma tbx xtf
+  function void set_manual_control(bit mc);
     manual_control = mc;
   endfunction : set_manual_control
 

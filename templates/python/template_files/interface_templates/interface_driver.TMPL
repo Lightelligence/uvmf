@@ -24,7 +24,7 @@ class {{name}}_driver  {{macro.paramDeclare(paramDefs)|indent(6)}} extends uvmf_
                    .RSP({{name}}_transaction  {{macro.paramUse(paramDefs)|indent(29)}} ));
 
 {{macro.compUtils([ name,'_driver']|join(""),paramDefs)}}
-{% if veloceReady %}
+{% if useStructBfm %}
 //*******************************************************************
 // Macros that define structs located in {{name}}_macros.svh
 //*******************************************************************
@@ -54,7 +54,7 @@ class {{name}}_driver  {{macro.paramDeclare(paramDefs)|indent(6)}} extends uvmf_
 // using the configuration struct.
 
   virtual function void configure(input CONFIG_T cfg);
-{% if veloceReady %}
+{% if useStructBfm %}
       bfm.configure( cfg.to_struct() );
 {% else %}
       bfm.configure( cfg );
@@ -75,7 +75,7 @@ class {{name}}_driver  {{macro.paramDeclare(paramDefs)|indent(6)}} extends uvmf_
     // pragma uvmf custom access begin
     if (configuration.initiator_responder==RESPONDER) begin
       // Complete current transfer and wait for next transfer
-{% if veloceReady %}
+{% if useStructBfm %}
       bfm.respond_and_wait_for_next_transfer(
           {{name}}_initiator_struct,
           txn.to_responder_struct()
@@ -87,7 +87,7 @@ class {{name}}_driver  {{macro.paramDeclare(paramDefs)|indent(6)}} extends uvmf_
 {% endif %}
     end else begin
       // Initiate a transfer and get response
-{% if veloceReady %}
+{% if useStructBfm %}
       bfm.initiate_and_get_response(
           txn.to_initiator_struct(),
           {{name}}_responder_struct

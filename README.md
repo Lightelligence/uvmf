@@ -44,6 +44,30 @@ generated top-level environment sequence specialization. Simulation stops
 with a fatal message if the name is not registered or the type is
 incompatible.
 
+## Portable BFM transport and retired integrations
+
+Only VCS and Xcelium simulator profiles are supported. Mentor/Siemens-specific
+Questa/QVIP/FLI libraries, Veloce/TBX annotations and obsolete tool build
+templates have been removed. Upstream copyright and license notices remain.
+
+BFM communication is independent of any emulator. Interfaces default to
+`use_struct_bfm: true`, preserving the existing packed configuration and
+transaction structs, macro names, and BFM task/function signatures. Set
+`use_struct_bfm: false` to keep the existing object-based communication mode.
+The old interface key `veloce_ready` is accepted as a compatibility alias;
+conflicting old/new values are rejected. Archived YAML uses `use_struct_bfm`.
+Bench-level `veloce_ready` remains accepted but no longer restricts interface
+transport or requests emulator support.
+
+Generic UVMF, SystemC/TLM, standard DPI-C (including the portable DPI link),
+clock/reset utilities, transaction-viewing hook signatures, and custom merge
+regions are retained. The clock/reset utility directory keeps its historical
+path for existing users, but no longer contains proprietary memload/FLI code,
+emulator annotations, or tool-specific test/build artifacts. VIP analysis
+exports now use the standard `uvm_sequence_item` base instead of an MVC type.
+Existing custom code is preserved, not rewritten: user-authored references to
+retired vendor packages must be migrated by their owners.
+
 ## Synopsys VIP integration
 
 Synopsys VIP environments use the same hierarchy as any other reusable IP

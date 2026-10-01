@@ -68,8 +68,6 @@ class BenchDumper:
         data['imports'].append({'name':i})
     if (self.obj.useCoEmuClkRstGen == True):
       data['use_coemu_clk_rst_gen'] = 'True'
-    if (self.obj.veloceReady == False):
-      data['veloce_ready'] = "False"
     if (len(self.obj.additionalTops)):
       data['additional_tops'] = self.obj.additionalTops
     return data
@@ -84,12 +82,6 @@ class EnvironmentDumper:
     data = {}
     if (is_archive == True):
       data['existing_library_component'] = "True"
-    data['vip_memory_agents'] = []
-    for i in self.obj.qvipMemoryAgents:
-      params = []
-      for p in i.parameters:
-        params.append({'name':p.name,'value':p.value})
-      data['vip_memory_agents'].append({'name':i.name,'type':i.type,'vip_environment':i.qvipEnv,'parameters':params})
     data['non_uvmf_components'] = []
     for i in self.obj.nonUvmfComponents:
       if (len(i.parameters)>0):
@@ -185,7 +177,7 @@ class EnvironmentDumper:
                                    'reg_model_package': str(rm.regModelPkg),
                                    'reg_block_class': str(rm.regBlockClass),
                                    'reg_adapter_class': str(rm.adapterType),
-                                   'maps': [ { 'name': rm.busMap, 'interface': ifname, 'vip_agent': str(rm.qvipAgent), 'interface_type':('vip' if str(rm.vipType) == 'qvip' else str(rm.vipType))} ]
+                                   'maps': [ { 'name': rm.busMap, 'interface': ifname, 'vip_agent': str(rm.vipAgent), 'interface_type':str(rm.vipType)} ]
                                   }
     if self.obj.soName!="":
       data['dpi_define'] = {}
@@ -207,14 +199,6 @@ class EnvironmentDumper:
           v['c_args'] = i.cArgs
           v['sv_args'] = i.arguments
           data['dpi_define']['imports'].append(v)
-    if len(self.obj.qvipSubEnvironments):
-      data['vip_subenvs'] = []
-      for i in self.obj.qvipSubEnvironments:
-        data['vip_subenvs'].append({'name':i.name,'type':i.envPkg})
-    if len(self.obj.qvipConnections):
-      data['vip_connections'] = []
-      for i in self.obj.qvipConnections:
-        data['vip_connections'].append({'driver':i.output_component,'ap_key':i.output_port_name,'receiver':i.input_component+"."+i.input_component_export_name,'validate':str(i.validate)})
     if (len(self.obj.external_imports)):
       data['imports'] = []
       for i in self.obj.external_imports:
@@ -254,9 +238,9 @@ class ComponentDumper:
       data['analysis_ports'] = []
       for i in self.obj.analysisPorts:
         data['analysis_ports'].append({'name':i.name,'type':i.tType})
-    if len(self.obj.qvipAnalysisExports):
+    if len(self.obj.vipAnalysisExports):
       data['vip_analysis_exports'] = []
-      for i in self.obj.qvipAnalysisExports:
+      for i in self.obj.vipAnalysisExports:
         data['vip_analysis_exports'].append({'name':i.name,'type':i.tType})
     if len(self.obj.parameters):
       data['parameters'] = []
@@ -346,8 +330,8 @@ class InterfaceDumper:
       data['imports'] = []
       for i in self.obj.external_imports:
         data['imports'].append({'name':i})
-    if (self.obj.veloceReady == False):
-      data['veloce_ready'] = "False"
+    if (self.obj.useStructBfm == False):
+      data['use_struct_bfm'] = "False"
     return data
 
 import yaml
@@ -357,7 +341,7 @@ BOOLEAN_KEYS = {
   'existing_library_component','extdef','flat_output','gen_inbound_streaming_driver',
   'iscompare','isrand','use_adapter',
   'use_coemu_clk_rst_gen','use_dpi_link','use_explicit_prediction',
-  'use_register_model','veloce_ready','vip_agent',
+  'use_register_model','use_struct_bfm','vip_agent',
 }
 
 def canonical_yaml_values(value,key=None):

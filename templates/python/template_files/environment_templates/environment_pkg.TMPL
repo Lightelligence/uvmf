@@ -36,14 +36,8 @@ package {{name}}_env_pkg;
 {% for sub_env in env_pkgs %}
   import {{sub_env}}_env_pkg::*;
 {% endfor %}
-{% if qvipSubEnvironments|length > 0 %}
-{% if qvipMemoryAgents|length > 0 %}
-{% endif %}
-{% endif %}
-{% for sub_env in qvipSubEnvironments %}
-  import {{sub_env.envPkg}}_pkg::*;
-  import {{sub_env.envPkg}}_params_pkg::*;
-{% endfor %}
+
+
 {% for DPIImport in DPIImports %}
   import "DPI-C" context function {{DPIImport.svType}} {{DPIImport.name}} ({% for argument in DPIImport.arguments %}{{argument['dir']}} {{argument['type']}} {{argument['name']}} {{argument['unpacked_dimension']}} {% if not loop.last %},{% endif %}{% endfor %});
 {% endfor %}

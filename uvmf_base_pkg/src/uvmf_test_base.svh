@@ -83,7 +83,6 @@ class uvmf_test_base #(
     if (!$value$plusargs("UVM_TESTNAME=%s", test_name))
       `uvm_error("TEST", {"Unknown Test name", test_name})
     // Save transcript
-    // void'(mti_Cmd($sformatf("transcript file %s.$Sv_Seed.transcript.txt", test_name)));
 
 
     // Construct the top level configuration, environment and sequence.

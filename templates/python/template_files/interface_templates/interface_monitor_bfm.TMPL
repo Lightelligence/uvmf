@@ -28,7 +28,7 @@
 
 {% block contents %}
 import uvmf_base_pkg_hdl::*;
-{% if veloceReady %}
+{% if useStructBfm %}
 `include "{{src_dir}}{{name}}_macros.svh"
 {% else %}
 import {{name}}_pkg::*;
@@ -37,12 +37,8 @@ import {{name}}_pkg::*;
 
 {% if useDpiLink %}module{% else %}interface{% endif %} {{name}}_monitor_bfm {{macro.paramDeclare(paramDefs)|indent(2)}}
   ( {{name}}_if  bus );
-{% if veloceReady %}
-  // The pragma below and additional ones in-lined further down are for running this BFM on Veloce
-  // pragma attribute {{name}}_monitor_bfm partition_interface_xif
-{% endif %}
 
-`ifndef XRTL
+
 // This code is to aid in debugging parameter mismatches between the BFM and its corresponding agent.
 // Enable this debug by setting UVM_VERBOSITY to UVM_DEBUG
 // Setting UVM_VERBOSITY to UVM_DEBUG causes all BFM's and all agents to display their parameter settings.
@@ -65,7 +61,7 @@ initial begin : bfm_vs_agent_parameter_debug
       {% endif %}
       , UVM_DEBUG)
 end
-`endif
+
 
 {% if useDpiLink %}
   import "DPI-C" context function void C_{{name}}_notify_transaction( input c_bit_array_t bit_vec_in);
@@ -75,7 +71,7 @@ end
   export "DPI-C" task     wait_for_num_clocks;
 {% endif %}
 
-{% if veloceReady %}
+{% if useStructBfm %}
   // Structure used to pass transaction data from monitor BFM to monitor class in agent.
 `{{name}}_MONITOR_STRUCT
   {{name}}_monitor_s {{name}}_monitor_struct;
@@ -109,16 +105,17 @@ end
 
   // Proxy handle to UVM monitor
   {{name}}_pkg::{{name}}_monitor {{macro.paramUse(paramDefs)|indent(4)}} proxy;
-{% if veloceReady %}
-  // pragma tbx oneway proxy.notify_transaction
-{% endif %}
+
 
   // pragma uvmf custom interface_item_additional begin
   // pragma uvmf custom interface_item_additional end
 
   //******************************************************************
-  task wait_for_reset();{% if veloceReady %}// pragma tbx xtf {% endif %}
+  task wait_for_reset();
+{% if not useStructBfm %}
+    // Preserve the object-mode pre-wait; struct mode waits in do_wait_for_reset.
     @(posedge {{clock}}_i) ;
+{% endif %}
     do_wait_for_reset();
   endtask
 
@@ -135,7 +132,7 @@ end
   task wait_for_num_clocks(c_bit_array_t bit_vec);
     int unsigned count;
 {% else %}
-  task wait_for_num_clocks(input int unsigned count); {% if veloceReady %}// pragma tbx xtf {% endif %}
+  task wait_for_num_clocks(input int unsigned count);
 {% endif %}
 
     @(posedge {{clock}}_i);
@@ -145,7 +142,7 @@ end
 
   //******************************************************************
   event go;
-  function void start_monitoring();{% if veloceReady %}// pragma tbx xtf  {% endif %}
+  function void start_monitoring();
 
     -> go;
   endfunction
@@ -155,7 +152,7 @@ end
     @go;
     forever begin
       @(posedge {{clock}}_i);
-{% if veloceReady %}
+{% if useStructBfm %}
       do_monitor( {{name}}_monitor_struct );
 {% else %}
       monitored_trans = new("monitored_trans");
@@ -170,7 +167,7 @@ end
 {% if useDpiLink %}
       } {% endif %} );
 {% else %}
-{% if veloceReady %}
+{% if useStructBfm %}
       proxy.notify_transaction( {{name}}_monitor_struct );
 {% else %}
       proxy.notify_transaction( monitored_trans );
@@ -196,8 +193,8 @@ end
 {% endfor %}
     {act_pass,init_resp{% for config in configVars %},{{config.name}}{% endfor %}} = bit_vec;
 {% else %}
-{% if veloceReady %}
-  function void configure({{name}}_configuration_s {{name}}_configuration_arg); // pragma tbx xtf
+{% if useStructBfm %}
+  function void configure({{name}}_configuration_s {{name}}_configuration_arg);
 {% else %}
   function void configure({{name}}_configuration
                          {{macro.paramList(paramDefs,"                         ")}}
@@ -215,7 +212,7 @@ end
 
 
   // ****************************************************************************
-{% if veloceReady %}
+{% if useStructBfm %}
   task do_monitor(output {{name}}_monitor_s {{name}}_monitor_struct);
 
     // Available struct members:
@@ -258,14 +255,14 @@ end
     // task should return when a complete transfer has been observed.  Once this task is
     // exited with captured values, it is then called again to wait for and observe
     // the next transfer. One clock cycle is consumed between calls to do_monitor.
-{% if not veloceReady %}
+{% if not useStructBfm %}
     monitored_trans.start_time = $time;
 {% endif %}
     @(posedge {{clock}}_i);
     @(posedge {{clock}}_i);
     @(posedge {{clock}}_i);
     @(posedge {{clock}}_i);
-{% if not veloceReady %}
+{% if not useStructBfm %}
     monitored_trans.end_time = $time;
 {% endif %}
     // pragma uvmf custom do_monitor end

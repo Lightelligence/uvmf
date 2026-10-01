@@ -30,10 +30,7 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 
 {% endfor -%}
 
-{% for sub_env in qvipSubEnvironments %}
-  {{sub_env.envPkg}}_environment #()  {{sub_env.name}};
 
-{% endfor -%}
 
 {% for ap in analysis_ports %}
   uvm_analysis_port #({{ap.tType}}) {{ap.name}};
@@ -43,9 +40,7 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
   uvm_analysis_export #({{ep.tType}}) {{ep.name}};
 {% endfor -%}
 
-{% for agent in qvip_ap_names %}
-  uvm_analysis_port #( mvc_sequence_item_base ) {{agent.name}}_{{agent.agent}}_ap [string];
-{% endfor -%}
+
 
 {% for agent in agents %}
   typedef {{agent.ifPkg}}_agent {{macro.paramUseNested(agent.parameters)|indent(16)}} {{agent.name}}_t;
@@ -58,10 +53,7 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
   {{nonUvmfComp.name}}_t {{nonUvmfComp.name}};
 {% endfor -%}
 
-{% for qvipMemAgent in qvipMemoryAgents %}
-  typedef {{qvipMemAgent.type}} {{macro.paramUseNested(qvipMemAgent.parameters)|indent(16)}} {{qvipMemAgent.name}}_t;
-  {{qvipMemAgent.name}}_t {{qvipMemAgent.name}};
-{% endfor -%}
+
 
 {% for analysisComp in analysisComponents %}
   typedef {{analysisComp.type}} {{macro.paramUseNested(analysisComp.parameters)|indent(16)}} {{analysisComp.name}}_t;
@@ -148,10 +140,7 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
     {{sub_env.name}}.set_config(configuration.{{sub_env.name}}_config);
 {% endif %}
 {% endfor %}
-{% for sub_env in vipSubEnvironments %}
-    {{sub_env.name}} = {{sub_env.envPkg}}_environment#()::type_id::create("{{sub_env.name}}", this);
-    {{sub_env.name}}.set_config(configuration.{{sub_env.name}}_config);
-{% endfor %}
+
 {% for ap in analysis_ports %}
     {{ap.name}} = new("{{ap.name}}",this);
 {% endfor %}
@@ -165,10 +154,7 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 {% for nonUvmfComp in nonUvmfComponents %}
     {{nonUvmfComp.name}} = {{nonUvmfComp.name}}_t::type_id::create("{{nonUvmfComp.name}}", this);
 {% endfor %}
-{% for qvipMemAgent in vipMemoryAgents %}
-    {{qvipMemAgent.name}} = {{qvipMemAgent.name}}_t::type_id::create("{{qvipMemAgent.name}}", this);
-    {{qvipMemAgent.name}}.set_if_name({get_full_name(),".{{qvipMemAgent.qvipEnv}}",".{{qvipMemAgent.name}}"});
-{% endfor %}
+
 {% for analysisComp in analysisComponents %}
     {{analysisComp.name}} = {{analysisComp.name}}_t::type_id::create("{{analysisComp.name}}", this);
 {% if analysisComp.extDef == False %}
@@ -226,18 +212,9 @@ class {{name}}_environment{% if paramDefs|length > 0 %} {{macro.paramDeclare(par
 {% for conn in connections %}
     {{conn.memberName}}.{{conn.pName}}.connect({{conn.subscriberMemberName}}.{{conn.aeName}});
 {% endfor -%}
-{% for agent in vip_ap_names %}
-     {{agent.name}}_{{agent.agent}}_ap = {{agent.name}}.{{agent.agent}}.ap;
-{% endfor -%}
-{% for connection in vipConnections %}
-    {{connection.output_component}}_ap["{{connection.output_port_name}}"].connect({{connection.input_component}}.{{connection.input_component_export_name}});
-{% endfor -%}
-{% for sub_env in vipSubEnvironments %}
-{% for agent in sub_env.agentList %}
-    if ( configuration.{{sub_env.name}}_interface_activity[{{loop.index0}}] == ACTIVE )
-       uvm_config_db #({{agent.sequencer}})::set(null,UVMF_SEQUENCERS,configuration.{{sub_env.name}}_interface_names[{{loop.index0}}],{{sub_env.name}}.{{agent.name}}.{% if agent.type == "vip" %}m_{% endif %}sequencer  );
-{% endfor -%}
-{% endfor -%}
+
+
+
 {% for ap in analysis_ports %}
     {{ap.memberConnection}}.connect({{ap.name}});
 {% endfor %}

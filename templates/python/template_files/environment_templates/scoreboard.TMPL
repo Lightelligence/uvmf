@@ -62,7 +62,7 @@ class {{name}} {{macro.paramDeclare(parameters)|indent(2)}} extends BASE_T;
   // Instantiate VIP analysis exports
 {% endif %}
 {% for export in vip_exports %}
-  uvm_analysis_imp_{{export.name}} #(mvc_sequence_item_base, {{name}} {{macro.paramUse(parameters)|indent(30)}}) {{export.name}};
+  uvm_analysis_imp_{{export.name}} #(uvm_sequence_item, {{name}} {{macro.paramUse(parameters)|indent(30)}}) {{export.name}};
 {% endfor %}
 
 {% for port in ports %}
@@ -89,7 +89,7 @@ class {{name}} {{macro.paramDeclare(parameters)|indent(2)}} extends BASE_T;
 {% for export in exports %}
     {{export.name}} = new("{{export.name}}", this);
 {% endfor %}
-{% for export in qvip_exports %}
+{% for export in vip_exports %}
     {{export.name}} = new("{{export.name}}", this);
 {% endfor %}
 {% for port in ports %}
@@ -135,11 +135,11 @@ class {{name}} {{macro.paramDeclare(parameters)|indent(2)}} extends BASE_T;
   // VIP transactions received through {{export.name}} initiate the execution of this function.
   // This function casts incoming VIP transactions into the correct protocol type and then performs prediction
   // of DUT output values based on DUT input, configuration and state
-  virtual function void write_{{export.name}}(mvc_sequence_item_base _t);
+  virtual function void write_{{export.name}}(uvm_sequence_item _t);
     // pragma uvmf custom {{export.name}}_scoreboard begin
     {{export.tType}} t;
     if (!$cast(t,_t)) begin
-      `uvm_fatal("PRED","Cast from mvc_sequence_item_base to {{export.tType}} in write_{{export.name}} failed!")
+      `uvm_fatal("PRED","Cast from uvm_sequence_item to {{export.tType}} in write_{{export.name}} failed!")
     end
     `uvm_info("PRED", "Transaction Received through {{export.name}}", UVM_MEDIUM)
     `uvm_info("PRED",{"            Data: ",t.convert2string()}, UVM_FULL)
