@@ -44,6 +44,12 @@ html,body,#wrapper{font-size:10pt!important;}
 </head>
 <body class="normal">
   <div id="wrapper">
+      <h1 id="currentsupport">Current UVMF Support</h1>
+
+<p>This guide is retained as a historical DPI-C architecture reference. MCD and TBX terminology below describes its origin, not a supported emulator integration. The example classes, including <code>dpi_link_agent</code>, <code>dpi_link_driver</code> and <code>dpi_link_monitor</code>, do not describe the current generated UVMF class hierarchy. Use the current UVMF agents and generated proxies with the retained <code>dpi_link_proxy</code> and <code>dpi_link_event</code> APIs.</p>
+
+<p>Current generation targets Red Hat Linux, Bazel, VCS and Xcelium. Questa Makefiles, simulator commands and TBX compilation are no longer supported. See the <a href="../../../README.md">repository workflow</a> and <a href="#simulatingandrunningwithamakefile">current DPI build-integration requirements</a>.</p>
+
       <h1 id="overview">Overview</h1>
 
 <p>Testbench Acceleration (TBX) communicates between the HVL and XRTL testbenches using DPI-C function calls. While it&#8217;s possible to share a SystemVerilog interface between XRTL and HVL using the <code>uvm_config_db</code> database, this approach merely hides the DPI-C function calls going on beneath the surface. </p>
@@ -386,7 +392,7 @@ endmodule
 endmodule
 </code></pre>
 
-<p>The <code>hvl_top</code> imports a <code>foo_xrtl_pkg</code> and a <code>foo_pkg</code>. The <code>foo_xrtl_pkg</code> (and all XRTL packages) contain definitions that the XRTL needs and that can be compiled in <code>tbxcompile</code>. In this example the XRTL package is empty. </p>
+<p>The <code>hvl_top</code> imports a <code>foo_xrtl_pkg</code> and a <code>foo_pkg</code>. The <code>foo_xrtl_pkg</code> contains definitions that the XRTL needs; compile it before the modules and packages that import it using the selected simulator. In this example the XRTL package is empty. </p>
 
 <p>This is a simple example with one test, so we specify the test in the <code>run_test</code> task. Normally we call this task with no argument.</p>
 
@@ -1076,78 +1082,23 @@ endclass
 endclass
 </code></pre>
 
-<h1 id="simulatingandrunningwithamakefile">Simulating and Running with a Makefile</h1>
+<h1 id="simulatingandrunningwithamakefile">Building and Running with Bazel, VCS or Xcelium</h1>
 
-<p>The Makefile below is a good starting point for your Makefile. It annotated inline: </p>
+<p>The former Questa Makefile recipe has been retired. Use the <a href="../../../README.md">Red Hat Linux workflow</a> to generate Bazel files with the default VCS profile, or select <code>--simulator xcelium</code>. An interface can enable DPI proxy generation with <code>use_dpi_link: true</code>. Generation retains the DPI source and proxy APIs but does not provide a complete DPI C/C++ build target.</p>
 
-<pre><code>GPP=${QUESTA_HOME}/gcc-4.5.0-linux/bin/g++  
-VSIM_OPTIONS=xrtl_top hvl_top -sv_lib sv_lib 
-</code></pre>
+<p>Integrate DPI in your project's maintained Bazel targets:</p>
 
-<p>Point to the correct g++ compiler in the Questa library.<br/>
-Notice that the <code>VSIM_OPTIONS</code> use the <code>-sv_lib</code> option to point to a library called <code>sv_lib.so</code> The <code>.so</code> gets appended automatically. </p>
+<ol>
+<li>Compile <code>dpi_link_pkg.sv</code> after its UVM and UVMF dependencies and before generated interface packages that import it. Make the headers in <code>common/dpi_link_pkg</code> available to SystemVerilog compilation.</li>
+<li>Compile <code>common/dpi_link_pkg/dpi_link.cpp</code> and the generated interface <code>*_tc.cpp</code> bridges using a C++ compiler compatible with the selected simulator. Include <code>common/dpi_link_pkg</code> and that simulator's <code>svdpi.h</code> directory.</li>
+<li>If a bridge includes <code>dpiheader.h</code>, generate the DPI declarations from the same SystemVerilog sources using the selected simulator and expose that header to C++ compilation. Do not create an empty header to satisfy a build dependency.</li>
+<li>Link or load the resulting DPI code through your project's VCS or Xcelium build integration. Use matching simulator headers, library architecture and compiler ABI; do not reuse a library built against another simulator.</li>
+<li>Run a project-specific simulation that exercises the DPI imports, exports, scope lookup and event synchronization before relying on the integration.</li>
+</ol>
 
-<pre><code>sim: work/_info sv_lib.so  
-    vsim ${VSIM_OPTIONS} -c -do &quot;run -all&quot;
-</code></pre>
+<p>Exact compiler, linker and loader options belong to the project's simulator integration. Maintain those dependencies and options within the generated BUILD file's whole <code>bazel_file</code> custom region; <code>--merge_source</code> preserves it. Changing the generator's simulator profile does not refresh an existing custom BUILD file.</p>
 
-<p>This is the default target. It runs an interactive simulation. Notice that it uses <code>work/_info</code> as a predecessor. This keeps us from compiling unnecessarily when we run a simulation. </p>
-
-<p>Notice that <code>sv_lib.so</code> is also a predecessor. This file must exist for us to simulate. </p>
-
-<pre><code>gui: work/_info sv_lib.so  
-    vsim ${VSIM_OPTIONS} -i -voptargs=&quot;+acc&quot; -do &quot;log -r /*&quot;
-</code></pre>
-
-<p>Same as above but with the GUI.</p>
-
-<pre><code>work/_info: dpiheader.h 
-</code></pre>
-
-<p>The <code>work/_info</code> file is updated when we compile. This line forces us to create a new <code>dpiheader.h</code> file if one doesn&#8217;t exist. </p>
-
-<pre><code>sv_lib.so: foo_tc.cpp dpi_link.o dpiheader.h  
-    ${GPP} -I${BASE_DIR}/dpi_link  -I. -I${QUESTA_HOME}/include -fPIC foo_tc.cpp dpi_link.o -shared -o sv_lib.so 
-</code></pre>
-
-<p>Here is the compilation line for our DPI-C code. Notice that it leverages the <code>dpi_link.o</code> library and that it creates a <code>-shared</code> output with <code>-o sv_lib.so</code>. The <code>-fPIC</code> is necessary to create a shared library from <code>foo_tc.cpp</code>. </p>
-
-<p>Also notice that we have to include the <code>${QUESTA_HOME}/include</code> directory and the <code>dpi_link</code> directory.</p>
-
-<pre><code>dpiheader.h: *.sv *.svh tb.vf | work  
-    vlog -f tb.vf -dpiheader dpiheader.h  
-    touch dpiheader.h
-</code></pre>
-
-<p>Make the <code>dpiheader.h</code> file by compiling the design. This target depends upon all the <code>*.sv</code> and <code>*.svh</code> files as well as the <code>tb.vf</code> file. The <code>| work</code> dependency only fires if <code>work</code> doesn&#8217;t exist.</p>
-
-<pre><code>work:  
-    vlib work
-</code></pre>
-
-<p>If there is no <code>work</code> library then make one. </p>
-
-<pre><code>dpi_link.o: dpi_link/*.cpp dpi_link/*.h  
-    ${GPP} -I${BASE_DIR}/dpi_link  -I. -I${QUESTA_HOME}/include -fPIC ./dpi_link/dpi_link.cpp -shared -o dpi_link.o
-</code></pre>
-
-<p>Compile the <code>dpi_link.o</code> library if it doesn&#8217;t already exit. </p>
-
-<pre><code>tb.vf : *.vinfo  
-    make_filelist.py tb.vinfo
-</code></pre>
-
-<p>If any <code>*.vinfo</code> file has changed make a new <code>tb.vf</code> file.</p>
-
-<pre><code>clean:  
-    rm -rf work  
-    rm -f *.vf transcript *.wlf *.log  
-    rm -f *.so *.o dpiheader.h
-</code></pre>
-
-<p>Clean up. </p>
-
-<p>This basic Makefile can be expanded to all projects. </p>
+<p>The historical <code>foo_*</code> snippets above explain the communication design and are not a complete current build fixture. These integration requirements do not establish that a particular project's DPI runtime has been validated.</p>
 
 <div class="footnotes">
 <hr />

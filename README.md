@@ -68,6 +68,14 @@ exports now use the standard `uvm_sequence_item` base instead of an MVC type.
 Existing custom code is preserved, not rewritten: user-authored references to
 retired vendor packages must be migrated by their owners.
 
+The retained [DPI link guide](common/dpi_link_pkg/doc/DPI_Link_Users_Guide.html)
+is a historical architecture reference with current build-integration notes.
+Its MCD/TBX terminology and example classes describe the original design;
+use the current generated UVMF agents and proxies when integrating DPI.
+Projects must supply their own Bazel DPI C/C++ compilation and linkage using
+the selected simulator's headers and compatible compiler. The generator does
+not provide a complete DPI C/C++ build target.
+
 ## Synopsys VIP integration
 
 Synopsys VIP environments use the same hierarchy as any other reusable IP
