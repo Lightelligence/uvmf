@@ -19,8 +19,42 @@ The generated Bazel profile defaults to `--simulator vcs`. Select
 `@vip_xcelium_svt_pkg//:pkg` dependency instead of VCS-only options and
 `@vip_vcs_svt_pkg//:pkg`.
 
-`--check` validates all YAML references and reports obsolete generated output
-without writing or deleting anything.
+`--check` validates YAML, checks component/TLM references and BFM parameter
+names for the components selected by `--generate` (all components by default),
+and reports obsolete generated output without writing or deleting anything.
+
+## Generator diagnostics
+
+Use `--debug` to show resolved YAML paths, simulator selection, component counts,
+validation/generation stages and template search paths. During a merge it also
+reports the backup and intermediate output directories. For example:
+
+```bash
+python3 scripts/yaml2uvmf.py --debug --check <yaml-files>
+python3 scripts/yaml2uvmf.py --debug --simulator xcelium -d <new-dv-dir> <yaml-files>
+```
+
+Debug messages, warnings and errors go to stderr. `-q/--quiet` suppresses normal
+progress; warnings and explicitly requested debug messages remain visible.
+Errors return a nonzero status. Expected input errors omit Python tracebacks
+unless `--debug` is enabled.
+
+The generator rejects duplicate YAML keys and declaration names, malformed
+containers, invalid Boolean controls, unknown component/TLM references and
+unknown bench BFM parameter names. YAML merge anchors (`<<`) may still provide
+defaults that explicit keys override. Boolean controls accept native YAML
+`true`/`false` or the compatibility strings `"True"`/`"False"`; misspelled or
+lowercase quoted strings are rejected rather than silently disabling a feature.
+Parameter values remain SystemVerilog expressions.
+
+An existing output directory triggers a warning because generation skips
+existing files. Use `--merge_source=<existing-dv-dir>` to apply YAML changes
+while preserving custom blocks. Merge-only options require `--merge_source`;
+`--clean` and `--yaml` cannot be combined with `--check` or `--merge_source`.
+`--merge_debug` output must be empty and separate from the source tree. Explicitly
+skipping missing custom blocks warns that omitted code must be recovered from
+the backup. Deprecated settings and bypassed TLM endpoint checks also warn;
+`extdef: true` and `validate: false` remain available for external components.
 
 ## Selecting a top-level sequence
 

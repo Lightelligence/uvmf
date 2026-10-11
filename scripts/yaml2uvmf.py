@@ -48,6 +48,7 @@ from optparse import OptionParser, SUPPRESS_HELP
 from fnmatch import fnmatch
 import shutil
 import atexit
+import traceback
 
 # Determine addition to sys.path automatically based on script location
 # This means user does not have to explicitly set PYTHONPATH in order for this
@@ -59,7 +60,8 @@ sys.path.insert(0,os.path.dirname(os.path.dirname(os.path.realpath(__file__)))+"
 from uvmf_yaml import  *
 import uvmf_gen
 from uvmf_yaml.obsolete import find_obsolete_outputs, remove_obsolete_outputs
-from uvmf_gen import (UVMFCommandLineParser,PassThroughOptionParser,UserError,InterfaceClass,EnvironmentClass,BenchClass)
+from uvmf_gen import (UVMFCommandLineParser,PassThroughOptionParser,UserError,InterfaceClass,EnvironmentClass,BenchClass,report_warning,report_debug)
+from jinja2 import TemplateError
 from voluptuous import Invalid, MultipleInvalid
 from voluptuous.humanize import humanize_error
 from uvmf_version import version
@@ -70,6 +72,35 @@ except ImportError:
   print("ERROR : yaml package not found.  See templates.README for more information")
   print("Python version info:\n{}".format(sys.version))
   sys.exit(1)
+
+class UniqueKeySafeLoader(yaml.SafeLoader):
+  """Reject explicit duplicate keys before flattening legal YAML merge keys."""
+  def flatten_mapping(self,node):
+    if not hasattr(self,'checked_mappings'):
+      self.checked_mappings = set()
+    if id(node) not in self.checked_mappings:
+      self.checked_mappings.add(id(node))
+      seen = {}
+      for key_node,_ in node.value:
+        if key_node.tag == 'tag:yaml.org,2002:merge':
+          key = ('yaml merge key',)
+        elif key_node.tag == 'tag:yaml.org,2002:value':
+          key = key_node.value
+        else:
+          key = self.construct_object(key_node)
+        try:
+          previous = seen.get(key)
+        except TypeError:
+          raise yaml.constructor.ConstructorError(
+            'while constructing a mapping',node.start_mark,
+            'found unhashable key',key_node.start_mark)
+        if previous is not None:
+          raise yaml.constructor.ConstructorError(
+            'first definition of key {0!r}'.format(key),previous,
+            'Duplicate YAML key {0!r}; remove or rename the duplicate'.format(key),
+            key_node.start_mark)
+        seen[key] = key_node.start_mark
+    return super().flatten_mapping(node)
 
 def merge_summary(merge,verbose=False):
   block_count = sum(len(l) for l in merge.found_blocks.values())
@@ -133,10 +164,10 @@ class ConfigFileReader:
     self.fname = fname
     self.files = []
     try:
-      self.fh = open(fname,'r',encoding='utf-8-sig')
-    except IOError:
-      raise UserError("Unable to open -f/-F file "+fname)
-    self.lines = self.fh.readlines()
+      with open(fname,'r',encoding='utf-8-sig') as handle:
+        self.lines = handle.readlines()
+    except (OSError,UnicodeError) as error:
+      raise UserError("Unable to read -f/-F file {0}: {1}. Use UTF-8 and check the path.".format(fname,error))
     for line in self.lines:
       # Strip comments
       line = re.sub(r"(.*?)#.*",r"\1",line.rstrip()).strip()
@@ -146,7 +177,6 @@ class ConfigFileReader:
         if relative_to_file:
           line = os.path.normpath(os.path.dirname(os.path.abspath(fname))+os.path.sep+line)
         self.files.append(line)
-    self.fh.close()
 
 class Node:
   def __init__(self, name, type, parent):
@@ -218,6 +248,7 @@ class DataClass:
     'array','iscompare','isrand','use_adapter',
     'use_coemu_clk_rst_gen','use_dpi_link','use_explicit_prediction',
     'use_register_model','veloce_ready','use_struct_bfm','vip_agent',
+    'validate',
   }
   LIST_KEYS = {
     'active_passive','additional_tops','agents','analysis_components',
@@ -228,6 +259,7 @@ class DataClass:
     'interface_params','maps','non_uvmf_components','parameters','ports',
     'scoreboards','subenvs','sv_args','tlm_connections',
     'transaction_constraints','transaction_vars','typedefs','uvmc_files',
+    'top_env_params',
     'vip_analysis_exports','vip_connections','vip_memory_agents','vip_subenvs',
   }
 
@@ -235,11 +267,48 @@ class DataClass:
     self.data = {'interfaces':{},'environments':{},'benches':{},'util_components':{},'vip_environments':{},'vip_library':{},'global':{}}
     self.parser = parser
     self.debug = debug
+    self.check_only = False
     self.validators = {}
     self.used_ac_items = []
     self.used_uvmf_envs = []
     self.dest_dir_override = None
     self.data_sources = {key:{} for key in self.data.keys()}
+
+  def validateInputShape(self,value,path,source,ancestors=()):
+    """Check containers before semantic preprocessing can dereference them."""
+    if isinstance(value,(dict,list)):
+      if id(value) in ancestors:
+        raise UserError('Recursive YAML alias at {0} in {1}; use an acyclic configuration'.format(path,source))
+      ancestors = ancestors+(id(value),)
+    if isinstance(value,dict):
+      for key,item in value.items():
+        item_path = path+'.'+str(key)
+        if key in self.LIST_KEYS and item is not None and not isinstance(item,list):
+          raise UserError('{0} in {1} must be a list (use [] for an empty list)'.format(item_path,source))
+        if key in ('agents','subenvs','vip_subenvs','vip_memory_agents') and isinstance(item,list):
+          for index,entry in enumerate(item):
+            if not isinstance(entry,dict):
+              raise UserError('{0}[{1}] in {2} must be a mapping'.format(item_path,index,source))
+        if key in self.BOOLEAN_KEYS and not isinstance(item,bool) and item not in ('True','False'):
+          raise UserError('{0} in {1} has invalid Boolean value {2!r}; use YAML true/false or the strings "True"/"False"'.format(item_path,source,item))
+        self.validateInputShape(item,item_path,source,ancestors)
+    elif isinstance(value,list):
+      for index,item in enumerate(value):
+        self.validateInputShape(item,'{0}[{1}]'.format(path,index),source,ancestors)
+
+  def validateUniqueNames(self,value,path,source):
+    if isinstance(value,dict):
+      for key,item in value.items():
+        self.validateUniqueNames(item,path+'.'+str(key),source)
+    elif isinstance(value,list):
+      seen = set()
+      for index,item in enumerate(value):
+        if isinstance(item,dict) and 'name' in item:
+          name = item['name']
+          if name in seen:
+            raise UserError('Duplicate name "{0}" in {1} ({2}); each entry must have a unique name'.format(name,path,source))
+          seen.add(name)
+        self.validateUniqueNames(item,'{0}[{1}]'.format(path,index),source)
 
   def canonicalTopLevelKey(self,key):
     aliases = {
@@ -301,14 +370,16 @@ class DataClass:
     return normalized
 
   def parseFile(self,fname):
+    report_debug('Reading YAML: '+os.path.abspath(fname),self.debug)
     try:
-      fs = open(fname,encoding='utf-8-sig')
-    except IOError:
-      raise UserError("Unable to open config file "+fname)
-    try:
-      d = yaml.safe_load(fs)
-    finally:
-      fs.close()
+      with open(fname,encoding='utf-8-sig') as handle:
+        d = yaml.load(handle,Loader=UniqueKeySafeLoader)
+    except yaml.YAMLError as error:
+      raise UserError('Invalid YAML in {0}:\n{1}'.format(fname,error)) from None
+    except UnicodeError as error:
+      raise UserError('Unable to decode YAML {0} as UTF-8: {1}'.format(fname,error)) from None
+    except OSError as error:
+      raise UserError('Unable to open config file {0}: {1}. Check the path and environment variables.'.format(fname,error)) from None
     if not isinstance(d,dict) or not isinstance(d.get('uvmf'),dict):
       raise UserError(
         'Contents of {0} not valid UVMF info: top-level "uvmf" must be a non-empty mapping'.format(
@@ -321,10 +392,14 @@ class DataClass:
           fname
         )
       )
+    canonical_keys = {}
     for raw_key in d['uvmf'].keys():
       k = self.canonicalTopLevelKey(raw_key)
       if k not in self.data.keys():
-        raise UserError("Top-level element \""+k+"\" in "+fname+" is not valid. Allowed entries:\n  "+str(self.data.keys()))
+        raise UserError('Top-level element "{0}" in {1} is not valid. Allowed entries:\n  {2}'.format(k,fname,', '.join(self.data)))
+      if k in canonical_keys:
+        raise UserError('Sections "{0}" and "{1}" in {2} refer to the same section; keep only one'.format(canonical_keys[k],raw_key,fname))
+      canonical_keys[k] = raw_key
     for elem in self.data.keys():
       try:
         incoming = d['uvmf'][elem]
@@ -339,6 +414,20 @@ class DataClass:
             elem,fname
           )
         )
+      if elem in ('global','vip_library'):
+        if elem == 'global':
+          self.validateInputShape(incoming,elem,fname)
+      else:
+        for name,definition in incoming.items():
+          if not isinstance(name,str) or not name:
+            raise UserError('Component name {0!r} in {1} ({2}) must be a non-empty string'.format(name,elem,fname))
+          if not isinstance(definition,dict):
+            raise UserError('{0}.{1} in {2} must be a mapping'.format(elem,name,fname))
+          self.validateInputShape(definition,elem+'.'+name,fname)
+          if 'veloce_ready' in definition and elem in ('interfaces','benches'):
+            message = ('use use_struct_bfm on the interface instead' if elem == 'interfaces'
+                       else 'this bench setting is ignored; select use_struct_bfm on each interface')
+            report_warning('{0}.{1}.veloce_ready in {2} is deprecated; {3}'.format(elem,name,fname,message))
       incoming = self.normalizeBooleanValues(incoming)
       if elem in ('global','vip_library'):
         for key,value in incoming.items():
@@ -388,7 +477,9 @@ class DataClass:
           self.validators[t].schema(v)
         except MultipleInvalid as e:
           resp = humanize_error(v,e).split('\n')
-          raise UserError("While validating "+t+" YAML '"+c+"':\n"+pprint.pformat(resp,indent=2))
+          source = self.data_sources[t].get(c,'<in-memory>')
+          raise UserError("While validating "+t+" YAML '"+c+"' in "+source+":\n"+pprint.pformat(resp,indent=2))
+        self.validateUniqueNames(v,t if t == 'global' else t+'.'+c,self.data_sources[t].get(c,'<in-memory>'))
     self.validateBenchSelectors()
     self.validateEnvironmentHierarchy()
 
@@ -477,11 +568,12 @@ class DataClass:
     environments = self.data['environments']
     for env_name,env in environments.items():
       instance_names = set()
-      for category in ('agents','subenvs','vip_subenvs'):
+      for category in ('agents','subenvs','vip_subenvs','analysis_components','scoreboards','non_uvmf_components'):
         for instance in env.get(category,[]):
           names = [instance['name']]
           if category == 'subenvs' and instance.get('array') == 'True':
-            names = ["{0}_{1}".format(instance['name'],index) for index in range(instance['count'])]
+            # Reserve both the SV array member and concrete UVM instance names.
+            names.extend("{0}_{1}".format(instance['name'],index) for index in range(instance['count']))
           for instance_name in names:
             if instance_name in instance_names:
               raise UserError("Duplicate instance name \"{0}\" in environment \"{1}\"".format(instance_name,env_name))
@@ -645,7 +737,7 @@ class DataClass:
     ## Check to see if any utility components were defined but never instantiated, flag that as a warning
     for util_comp in self.data['util_components']:
       if util_comp not in self.used_ac_items:
-        print("  WARNING : Utility component \""+util_comp+"\" was defined but never used. It will not be generated.")
+        report_warning('Utility component "{0}" was not used by the selected environments and will not be generated. Check --generate and analysis_components.'.format(util_comp))
     ## Verify that something was produced (possible that YAML input was empty or genarray had no matches)
     if count==0 and verify:
       raise UserError("No output was produced!")
@@ -825,14 +917,12 @@ class DataClass:
         item_matches = item_matches or ('path' in item and self.normalizeBfmPath(item['path']) == bfm_path)
         if item_matches:
           foundItem = True
-          if not options.quiet:
-            print("In bench '%s' - Found explicit parameters for BFM %s, will not elaborate" % (benchName,bfm_name))
+          report_debug("In bench '%s' - Found explicit parameters for BFM %s, will not elaborate" % (benchName,bfm_name),self.debug)
           break
       if not foundItem:
         if 'parameters' in node.info:
-          if not options.quiet:
-            for p in node.info['parameters']:
-              print("In bench '%s' - Resolved unspecified BFM parameter %s:%s to value '%s'" % (benchName,bfm_name,p['name'],p['value']))
+          for p in node.info['parameters']:
+            report_debug("In bench '%s' - Resolved unspecified BFM parameter %s:%s to value '%s'" % (benchName,bfm_name,p['name'],p['value']),self.debug)
           self.data['benches'][benchName]['interface_params'].append({ 'bfm_name' : bfm_name, 'value' : node.info['parameters'] })
     return
 
@@ -914,7 +1004,7 @@ class DataClass:
         child_node.info['parameters'].append({'name':p_definition['name'],'value':p_definition['value']})
         #print("DEBUG: Adding default parameter %s:%s value %s" % (child_node.path(),p_definition['name'],p_definition['value']))
       else:
-        print("WARNING: No value found for parameter \"%s\" in component \"%s\" (type \"%s\")" % (p_definition['name'],child_node.path(),child_node.info['type']))
+        report_warning("No value found for parameter \"%s\" in component \"%s\" (type \"%s\"). Set the parameter value or provide an instance override." % (p_definition['name'],child_node.path(),child_node.info['type']))
 
   def buildNodes(self,node):
     if 'agents' in self.data['environments'][node.type]:
@@ -1242,7 +1332,7 @@ class DataClass:
             mess = mess+"\n "+ap
           if env_has_extdef_items:
             mess = mess+"\nPort may be on externally defined component - Skipping check on this connnection."
-            print(mess)
+            report_warning(mess)
           else:
             raise UserError(mess)
         env.addAnalysisPort(n,t,c,memberConnection=self.environmentMemberPath(name,c))
@@ -1256,7 +1346,7 @@ class DataClass:
             mess = mess+"\n "+ae
           if env_has_extdef_items:
             mess = mess+"\nPort may be on externally defined component - Skipping check on this connnection."
-            print(mess)
+            report_warning(mess)
           else:
             raise UserError(mess)
         env.addAnalysisExport(n,t,c,memberConnection=self.environmentMemberPath(name,c))
@@ -1276,7 +1366,7 @@ class DataClass:
               mess = mess+"\n "+ap
             if env_has_extdef_items:
               mess = mess+"\nPort may be on externally defined component - Skipping check on this connnection."
-              print(mess)
+              report_warning(mess)
             else:
               raise UserError(mess)
           if r not in valid_ae_list:
@@ -1285,9 +1375,11 @@ class DataClass:
               mess = mess+"\n "+ae
             if env_has_extdef_items:
               mess = mess+"\nPort may be on externally defined component - Skipping check on this connnection."
-              print(mess)
+              report_warning(mess)
             else:
               raise UserError(mess)
+        if v == 'False':
+          report_warning('Environment "{0}" skips TLM endpoint validation for "{1}" -> "{2}" (validate: false); verify external endpoints during compilation.'.format(name,d,r))
         env.addConnection('.'.join(dlist[:-1]),dlist[-1],'.'.join(rlist[:-1]),rlist[-1],v,memberName=self.environmentMemberPath(name,'.'.join(dlist[:-1])),subscriberMemberName=self.environmentMemberPath(name,'.'.join(rlist[:-1])))
     except KeyError: pass
     try:
@@ -1379,7 +1471,7 @@ class DataClass:
           vip_type = maps[0]['interface_type']
           ## Notify user of contradictions between vip_agent and type
           if (vip_agent == "True" and ( vip_type == "uvmf" or vip_type == "other" )) or (vip_agent == "False" and vip_type == "vip" ):
-            print("WARNING: Register model map named \""+maps[0]['name']+"\" has type set to \""+vip_type+"\" and vip_agent set to \""+vip_agent+"\". These settings are contradictory.  The type field overides the vip_agent field and is used in generation." )
+            report_warning("Register model map named \""+maps[0]['name']+"\" has type set to \""+vip_type+"\" and vip_agent set to \""+vip_agent+"\". These settings are contradictory. The type field overrides vip_agent and is used in generation.")
         except KeyError:
           if vip_agent == "True":
             vip_type = "vip"
@@ -1476,8 +1568,8 @@ class DataClass:
     except KeyError:
       pass
     if (existing_component == True):
-      print("  Skipping generation of predefined component "+str(name))
-    else:
+      report_debug('Skipping existing library environment '+str(name),self.debug)
+    elif not self.check_only:
       env.create(parser=self.parser,archive_yaml=archive_yaml)
     return env
 
@@ -1668,6 +1760,10 @@ class DataClass:
         aParams = ifp_dict[bfm_name]
       else:
         aParams = {}
+      valid_parameters = [parameter['name'] for parameter in agentDef.get('parameters',[])]
+      for parameter in aParams:
+        if parameter not in valid_parameters:
+          raise UserError('Bench "{0}" BFM "{1}" (interface "{2}") uses unknown parameter "{3}". Valid parameters: {4}'.format(name,canonical_path,a['bfm_type'],parameter,', '.join(valid_parameters) or '<none>'))
       try:
         port_list = agentDef['ports']
       except KeyError:
@@ -1742,8 +1838,8 @@ class DataClass:
       ben.bench_plusargs = struct['bench_plusargs']
     ben.used_uvmf_envs = self.used_uvmf_envs
     if (existing_component == True):
-      print("  Skipping generation of predefined component "+str(name))
-    else:
+      report_debug('Skipping existing library bench '+str(name),self.debug)
+    elif not self.check_only:
       ben.create(parser=self.parser,archive_yaml=archive_yaml)
     return ben
 
@@ -1869,7 +1965,7 @@ class DataClass:
       intf.specifyResponseOperation(resp_op)
       resp_data = response_info['data']
       intf.specifyResponseData(resp_data)
-      print("Warning: response_info YAML structure deprecated.  Slave agent response data now determined by arguments to respond_and_wait_for_next_transfer task within generated driver_bfm.")
+      report_warning('Interface "{0}" response_info is deprecated. Set response arguments in respond_and_wait_for_next_transfer in the generated driver_bfm.'.format(name))
     except KeyError: pass
     dpi_def = struct.get('dpi_define')
     if dpi_def is not None:
@@ -1921,8 +2017,8 @@ class DataClass:
     except KeyError:
       pass
     if existing_component == True:
-      print("  Skipping generation of predefined component "+str(name))
-    else:
+      report_debug('Skipping existing library interface '+str(name),self.debug)
+    elif not self.check_only:
       intf.create(parser=self.parser,archive_yaml=archive_yaml)
     return intf
 
@@ -1947,6 +2043,51 @@ class DataClass:
       if p['name'] not in dpn:
         raise UserError("Unable to find parameter \""+p['name']+"\" in definition of "+instanceType+" \""+definitionName+"\" as instance \""+instanceName+"\" in "+parentType+" \""+parentName+"\"")
 
+def validateOptions(options):
+  for enabled,flag in (
+      (options.merge_skip_missing,'--merge_skip_missing_blocks'),
+      (options.merge_migrate_unmarked,'--merge_migrate_unmarked'),
+      (options.merge_debug,'--merge_debug'),
+      (options.merge_verbose,'--merge_verbose')):
+    if enabled and not options.merge_source:
+      raise UserError(flag+' requires --merge_source')
+  for enabled,flag in ((options.clean,'--clean'),(options.yaml,'--yaml')):
+    if enabled and (options.check_only or options.merge_source):
+      raise UserError('Cannot combine {0} with {1}; run these operations separately'.format(flag,'--check' if options.check_only else '--merge_source'))
+  if options.merge_source:
+    options.merge_source = os.path.abspath(os.path.normpath(options.merge_source))
+    if not os.path.isdir(options.merge_source):
+      raise UserError('--merge_source directory does not exist: {0}. Generate into a new directory first, or select the existing source directory.'.format(options.merge_source))
+  destination = os.path.abspath(os.path.normpath(options.dest_dir))
+  if os.path.exists(destination) and not os.path.isdir(destination):
+    raise UserError('Output destination is not a directory: '+destination)
+  if options.template_dir and not os.path.isdir(options.template_dir):
+    raise UserError('Template directory does not exist: {0}. Check --template_dir.'.format(options.template_dir))
+  if options.merge_source and not options.merge_debug:
+    if destination == os.path.abspath('./uvmf_template_output'):
+      options.dest_dir = options.merge_source
+    elif os.path.normcase(destination) != os.path.normcase(options.merge_source):
+      raise UserError('-d/--dest_dir must match --merge_source for an in-place merge')
+  if options.merge_source and options.merge_debug:
+    if os.path.normcase(destination) == os.path.normcase(options.merge_source):
+      options.dest_dir = destination+'_tmp'
+      destination = options.dest_dir
+    destination_real = os.path.normcase(os.path.realpath(destination))
+    source_real = os.path.normcase(os.path.realpath(options.merge_source))
+    try:
+      common = os.path.commonpath([destination_real,source_real])
+    except ValueError:
+      common = None  # Separate Windows drives cannot overlap.
+    if common is not None and common in (destination_real,source_real):
+      raise UserError('--merge_debug output must be outside --merge_source; choose a separate -d/--dest_dir directory')
+    if os.path.isdir(destination) and any(os.scandir(destination)):
+      raise UserError('--merge_debug destination {0} is not empty; choose a new or empty -d/--dest_dir directory to avoid merging stale generated files'.format(destination))
+  if options.overwrite and not options.merge_source:
+    if os.path.isdir(destination) and any(os.scandir(destination)):
+      raise UserError('Refusing -o/--overwrite on non-empty output {0}; use --merge_source={0} to preserve existing files and custom blocks'.format(destination))
+  if options.merge_skip_missing:
+    report_warning('--merge_skip_missing_blocks allows custom blocks absent from new output to be omitted. Review the merge report and recover needed code from the backup.')
+
 def run():
   ## When invoked, this script can read a series of provided YAML-based configuration files and parse them, building
   ## up a database of information on the contained components. Each component will have an associated uvmf_gen class
@@ -1958,7 +2099,7 @@ def run():
   ## same the script will match all of them)
   search_paths = ['.']
   __version__ = version
-  uvmf_parser = UVMFCommandLineParser(version=__version__,usage="yaml2uvmf.py [options] [yaml_file1 [yaml_fileN]]")
+  uvmf_parser = UVMFCommandLineParser(version=__version__,usage="yaml2uvmf.py [options] [yaml_file1 [yaml_fileN]]",pass_through=False)
   uvmf_parser.parser.add_option("-f","--file",dest="configfile",action="append",help="Specify a file list of YAML configs. Relative paths relative to the invocation directory")
   uvmf_parser.parser.add_option("-F","--relfile",dest="rel_configfile",action="append",help="Specify a file list of YAML configs. Relative paths relative to the file list itself")
   uvmf_parser.parser.add_option("-g","--generate",dest="gen_name",action="append",help="Specify which elements to generate (default is everything")
@@ -1972,34 +2113,23 @@ def run():
   uvmf_parser.parser.add_option("--no_archive_yaml",dest="no_archive_yaml",action="store_true",default=False,help="Disable YAML archive creation")
   uvmf_parser.parser.add_option("--check",dest="check_only",action="store_true",default=False,help="Validate YAML and report obsolete generated output without writing or deleting files")
   (options,args) = uvmf_parser.parser.parse_args()
-  if options.merge_migrate_unmarked and not options.merge_source:
-    raise UserError("--merge_migrate_unmarked requires --merge_source")
-  if options.enable_pdb or options.debug:
-    print("Python version info:\n"+sys.version)
+  sys.tracebacklimit = 1000 if options.debug or options.enable_pdb else 0
+  report_debug('Python: '+sys.version.replace('\n',' '),options.debug)
   if options.enable_pdb == True:
     import pdb
     pdb.set_trace()
-  elif options.debug == False:
-    sys.tracebacklimit = 0
+  validateOptions(options)
   if (len(args) == 0) and (options.configfile == None) and (options.rel_configfile == None) and (options.merge_source == None):
     raise UserError("No configurations or config file specified as input. Must provide one or both")
+  report_debug('Stage: parse; simulator={0}; mode={1}; destination={2}'.format(
+    options.simulator,'check' if options.check_only else 'merge' if options.merge_source else 'clean' if options.clean else 'generate',
+    os.path.abspath(options.dest_dir)),options.debug)
   if options.merge_source:
-    options.merge_source = os.path.abspath(os.path.normpath(options.merge_source))
-  if options.merge_source and not options.merge_debug:
-    destination = os.path.abspath(os.path.normpath(options.dest_dir))
-    merge_source = options.merge_source
-    if destination == os.path.abspath("./uvmf_template_output"):
-      options.dest_dir = options.merge_source
-    elif destination != merge_source:
-      raise UserError("-d/--dest_dir must match --merge_source for an in-place merge")
-  if options.overwrite and not options.merge_source:
-    destination = os.path.abspath(os.path.normpath(options.dest_dir))
-    if os.path.isdir(destination) and any(os.scandir(destination)):
-      raise UserError(
-        "Refusing -o/--overwrite on non-empty output {0}; use "
-        "--merge_source={0} to preserve existing files and custom blocks".format(destination)
-      )
-  dataObj = DataClass(uvmf_parser)
+    report_debug('Merge source: '+options.merge_source,options.debug)
+  dataObj = DataClass(uvmf_parser,debug=options.debug)
+  dataObj.check_only = options.check_only
+  # Component.create() reparses argv; retain the validated/resolved destination.
+  dataObj.dest_dir_override = options.dest_dir
   configfiles = []
   if options.configfile != None:
     for cf in options.configfile:
@@ -2017,6 +2147,7 @@ def run():
     raise UserError("No configuration YAML specified to parse, must provide at least one")
   for cfg in configfiles:
     dataObj.parseFile(cfg)
+  report_debug('Stage: validate; loaded '+', '.join('{0}={1}'.format(key,len(dataObj.data[key])) for key in ('interfaces','environments','benches','util_components')),options.debug)
   dataObj.validate()
   if 'elaborate_bfm_parameters' in dataObj.data['global'] and dataObj.data['global']['elaborate_bfm_parameters'] == 'True':
     for bench in dataObj.data['benches'].keys():
@@ -2038,12 +2169,10 @@ def run():
     atexit.register(merge_cleanup)
     options.dest_dir = merge_intermediate_dir
     dataObj.dest_dir_override = merge_intermediate_dir
-  elif options.merge_source != None and options.merge_debug and not options.check_only:
-    if os.path.abspath(os.path.normpath(options.dest_dir)) == os.path.abspath(os.path.normpath(options.merge_source)):
-      # Debug output must remain separate from the source being merged.
-      options.dest_dir = options.dest_dir + "_tmp"
-      dataObj.dest_dir_override = options.dest_dir
   if options.check_only:
+    # Build the same metadata as generation, but never call component.create().
+    # This checks TLM endpoints and BFM overrides without rendering or writes.
+    dataObj.buildElements(options.gen_name,build_existing=options.build_existing_components,archive_yaml=False)
     audit_root = options.merge_source if options.merge_source else options.dest_dir
     bench_roots = [os.path.join(audit_root,dataObj.data['global'].get('bench_location','project_benches'),name) for name in dataObj.data['benches']]
     findings = audit_output(audit_root,bench_roots or None)
@@ -2051,10 +2180,16 @@ def run():
       raise UserError("Output audit found obsolete generated content:\n  "+"\n  ".join(findings))
     if not options.quiet:
       print("YAML validation and output audit passed")
+    report_debug('Stage: validate complete; no output written',options.debug)
     return
+  destination = os.path.abspath(options.dest_dir)
+  if not options.merge_source and not options.clean and not options.yaml and os.path.isdir(destination) and any(os.scandir(destination)):
+    report_warning('Output directory {0} is not empty. Existing files will be skipped, so YAML changes may not reach generated source. Use --merge_source={0} to regenerate while preserving custom blocks.'.format(destination))
+  report_debug('Stage: generate; output='+destination,options.debug)
   dataObj.buildElements(options.gen_name,build_existing=options.build_existing_components,archive_yaml=(not options.no_archive_yaml))
   if options.merge_source:
     backup_copy = backup(options.merge_source)
+    report_debug('Stage: merge; backup={0}; intermediate={1}'.format(backup_copy,options.dest_dir),options.debug)
     if not options.quiet:
       print("Backed up original source to {0}".format(backup_copy))
       print("Parsing customizations from {0} ...".format(options.merge_source))
@@ -2101,12 +2236,34 @@ def run():
         merge_summary(merge,verbose=True)
       merge_summary(merge)
     if len(merge.missing_blocks)>0:
-      print("WARNING: Found \"pragma uvmf custom\" blocks in original source that could not be mapped to new output. These require hand-edits:")
+      report_warning('Found "pragma uvmf custom" blocks in original source that could not be mapped to new output. These require hand-edits:')
       for f in merge.missing_blocks:
-        print ("  File: {0}".format(f))
+        print ("  File: {0}".format(f),file=sys.stderr)
         for l in merge.missing_blocks[f]:
-          print("    \"{0}\"".format(l))
-      print("  Use backup or revision control source to recover the original content of these blocks")
+          print("    \"{0}\"".format(l),file=sys.stderr)
+      print("  Use backup or revision control source to recover the original content of these blocks",file=sys.stderr)
+  report_debug('Stage: complete',options.debug)
+
+def main():
+  try:
+    run()
+  except (UserError,OSError,TemplateError) as error:
+    if isinstance(error,TemplateError):
+      location = getattr(error,'filename',None) or getattr(error,'name',None) or '<template>'
+      if getattr(error,'lineno',None) is not None:
+        location += ', line '+str(error.lineno)
+      print('ERROR: Template {0}: {1}. Check --template_dir and UVMF_TEMPLATE_PATH.'.format(location,error),file=sys.stderr)
+    else:
+      print('ERROR: '+str(error),file=sys.stderr)
+    if getattr(sys,'tracebacklimit',0):
+      traceback.print_exc()
+    return 1
+  except Exception as error:
+    print('ERROR: Unexpected generator failure ({0}): {1}. Rerun with --debug for the Python traceback.'.format(type(error).__name__,error),file=sys.stderr)
+    if getattr(sys,'tracebacklimit',0):
+      traceback.print_exc()
+    return 1
+  return 0
 
 if __name__ == '__main__':
-  run()
+  sys.exit(main())

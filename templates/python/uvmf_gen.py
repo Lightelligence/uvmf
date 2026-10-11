@@ -127,6 +127,19 @@ class UserError(Exception):
   def __str__(self):
     return str(self.value)
 
+def report_warning(message):
+  """Keep actionable warnings visible even when normal progress is quiet."""
+  print("WARNING: "+message,file=sys.stderr)
+
+def report_debug(message,enabled=False):
+  if enabled:
+    print("DEBUG: "+message,file=sys.stderr)
+
+class StrictOptionParser(OptionParser):
+  def error(self,message):
+    self.print_usage(sys.stderr)
+    raise UserError(message+'. Use --help to list supported options.')
+
 ## Base element class for use in other generators
 class BaseElementClass(object):
   def __init__(self,name):
@@ -221,15 +234,16 @@ class BaseElementEnvironmentClass(BaseElementClass):
 
 ## Class to initialize command-line parser
 class UVMFCommandLineParser:
-  def __init__(self,version=None,usage=None):
-    self.parser = PassThroughOptionParser(version=version,usage=usage)
+  def __init__(self,version=None,usage=None,pass_through=True):
+    parser_type = PassThroughOptionParser if pass_through else StrictOptionParser
+    self.parser = parser_type(version=version,usage=usage)
     self.parser.add_option("-c","--clean",dest="clean",action="store_true",help="Remove only explicitly approved obsolete outputs instead of generating code")
-    self.parser.add_option("-q","--quiet",dest="quiet",action="store_true",help="Suppress output while running",default=False)
+    self.parser.add_option("-q","--quiet",dest="quiet",action="store_true",help="Suppress normal progress; warnings and errors remain visible",default=False)
     self.parser.add_option("-d","--dest_dir",dest="dest_dir",action="store",type="string",help="Override destination directory.  Default is \"$CWD/uvmf_template_output\"",default="./uvmf_template_output")
     self.parser.add_option("-t","--template_dir",dest="template_dir",action="store",type="string",help="Override which template directory to utilize.  Default is relative to location of uvmf_gen.py file")
     self.parser.add_option("-o","--overwrite",dest="overwrite",action="store_true",help="Overwrite existing output files (default is to skip)",default=False)
     self.parser.add_option("--simulator",dest="simulator",action="store",type="choice",choices=("vcs","xcelium"),help="Select the Bazel simulator profile: vcs (default) or xcelium",default="vcs")
-    self.parser.add_option("-b","--debug",dest="debug",action="store_true",help=SUPPRESS_HELP,default=False)
+    self.parser.add_option("-b","--debug",dest="debug",action="store_true",help="Show input paths, generation stages, template searches and Python tracebacks",default=False)
     self.parser.add_option("-y","--yaml",dest="yaml",action="store_true",help="Dump YAML file instead of generate code",default=False)
 
 ## Base class for the generator types, this is where the create method is defined.
@@ -665,6 +679,7 @@ class BaseGeneratorClass(BaseElementClass):
     for p in extra_paths+[template_path]:
       paths.append(os.path.join(p,self.template_ext_dir))
       paths.append(os.path.join(p,'base_templates'))
+    report_debug("Template search for {0} '{1}': {2}".format(self.gen_type,self.name,', '.join(paths)),self.options.debug)
     templateLoader = FileSystemFilterLoader(searchpath=paths,glob='*.TMPL')
     self.templateEnv = jinja2.Environment(
       loader=templateLoader,
@@ -674,7 +689,7 @@ class BaseGeneratorClass(BaseElementClass):
     if (desired_template == 'all'):
       templates = self.templateEnv.list_templates()
       if (len(templates) == 0):
-        raise UserError("No templates found in "+mypath)
+        raise UserError("No templates found for {0} '{1}'. Searched: {2}. Check --template_dir and UVMF_TEMPLATE_PATH.".format(self.gen_type,self.name,', '.join(paths)))
       try:
         templates.remove("base_template.TMPL")
       except:
