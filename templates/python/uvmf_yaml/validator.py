@@ -140,7 +140,7 @@ class BenchValidator(BaseValidator):
       Optional('use_coemu_clk_rst_gen'): Any('True','False'),
       Optional('clock_phase_offset'): str,
       Optional('reset_assertion_level'): str,
-      Optional('use_dpi_link'): str,
+      Optional('use_dpi_link'): Any('True','False'),
       Optional('reset_duration'): str,
       Optional('active_passive'): [ activePassiveSchema ],
       Optional('active_passive_default'): Any('ACTIVE','PASSIVE'),
@@ -251,13 +251,13 @@ class EnvironmentValidator(BaseValidator):
     tlmSchema = {
       Required('driver'): str,
       Required('receiver'): str,
-      Optional('validate'): str
+      Optional('validate'): Any('True','False')
     }
     vipTlmSchema = {
       Required('driver'): str,
       Required('ap_key'): str,
       Required('receiver'): str,
-      Optional('validate'): str
+      Optional('validate'): Any('True','False')
     }
     subenvSchema = {
       Required('name'): str,
@@ -356,9 +356,9 @@ class InterfaceValidator(BaseValidator):
       Required('clock'): str,
       Required('reset'): str,
       Optional('reset_assertion_level'): str,
-      Optional('use_dpi_link'): str,
+      Optional('use_dpi_link'): Any('True','False'),
       Optional('existing_library_component'): Any('True','False'),
-      Optional('gen_inbound_streaming_driver'): str,
+      Optional('gen_inbound_streaming_driver'): Any('True','False'),
       Optional('vip_lib_env_variable'): str,
       Optional('parameters'): [ self.parameterDefSchema ],
       Optional('hvl_pkg_parameters'): [ self.parameterDefSchema ],

@@ -2,90 +2,90 @@
 {% extends "base_template.TMPL" %}
 {% set conditional = "dpi_link" %}
 {% block description %}
-//----------------------------------------------------------------------
-
-// DESCRIPTION: This class communicates with the driver BFM using the
-//      DPI link C routines.  Transaction variables are packed into a bit
-//      stream that is used as arguments to the C routines.  This allows
-//      for generic C routines that can be used with any interface package
-//      using DPI link for BFM communication.
-
-//----------------------------------------------------------------------
+// DPI transport adapter for the generated driver and streaming driver APIs.
 {% endblock %}
 {% block contents %}
-
 // pragma uvmf custom description begin
 // pragma uvmf custom description end
 
-class {{name}}_driver_proxy {%if paramDefs|length > 0%}      #(
-{% for param in paramDefs %}      {{param.type}} {{param.name}}{% if param.value != None %} = {{param.value}}{% endif %}{% if not loop.last %},{% endif %}
-{% endfor %}      )
-{% endif %} extends dpi_link_proxy;
-      {%if paramDefs|length > 0%}
-      `uvm_object_param_utils({{name}}_driver_proxy{%if paramDefs|length > 0%} #({% for param in paramDefs %}.{{param.name}}({{param.name}}){% if not loop.last %},{% endif %}{% endfor %}) {% endif %})
-      {% else %}
-      `uvm_object_utils({{name}})
-      {% endif %}
-
-      // pragma uvmf custom class_item_additional begin
-      // pragma uvmf custom class_item_additional end
-
-      protected function new(string name = "xrtl_path");
-         super.new(name);
-      endfunction
-
-      `dpi_link_proxy_get({{name}}_driver_proxy{%if paramDefs|length > 0%} #({% for param in paramDefs %}.{{param.name}}({{param.name}}){% if not loop.last %},{% endif %}{% endfor %}) {% endif %} )
-
-      task access({% for txn in transVars %}
-            input {{txn.type}} {{txn.name}} {{txn.unpackedDim}}{% if not loop.last %},{% endif %}
-{% endfor %}
-
-            );
-            c_bit_array_t c_{{name}}_bit_array;
-            c_{{name}}_bit_array = { {% for txn in transVars %}{{txn.name}}{% if not loop.last %},{% endif %}{% endfor %}};
-            C_access(get_xrtl_path(), c_{{name}}_bit_array);
-            { {% for txn in transVars %}{{txn.name}}{% if not loop.last %},{% endif %}{% endfor %}} = c_{{name}}_bit_array;
-      endtask
-
-      task response({% for txn in transVars %}
-            inout {{txn.type}} {{txn.name}} {{txn.unpackedDim}}{% if not loop.last %},{% endif %}
-{% endfor %}
-
-            );
-            c_bit_array_t c_{{name}}_bit_array;
-            c_{{name}}_bit_array = { {% for txn in transVars %}{{txn.name}}{% if not loop.last %},{% endif %}{% endfor %}};
-            C_response(get_xrtl_path(), c_{{name}}_bit_array);
-            { {% for txn in transVars %}{{txn.name}}{% if not loop.last %},{% endif %}{% endfor %}} = c_{{name}}_bit_array;
-      endtask
-
-      function void configure(
-            uvmf_active_passive_t act_pass,
-            uvmf_initiator_responder_t   init_resp{% if configVars|length >0 %},{% endif %}
-            {% for config in configVars %}
-
-            {{config.type}} {{config.name}}{% if not loop.last %}, {% endif %}
-{% endfor %}
-            );
-            c_bit_array_t c_{{name}}_bit_array;
-            c_{{name}}_bit_array = {act_pass,init_resp{% if configVars|length >0 %},{% endif %}{% for config in configVars %}{{config.name}}{% if not loop.last %}, {% endif %}{% endfor %} };
-            C_configure(get_xrtl_path(), c_{{name}}_bit_array);
-            {act_pass,init_resp{% if configVars|length >0 %},{% endif %}{% for config in configVars %} {{config.name}}{% if not loop.last %}, {% endif %}{% endfor %}}= c_{{name}}_bit_array;
-         endfunction
-
-       function void do_response_ready( {% for txn in responseList %}
-      input {{txn.type}} {{txn.name}} {{txn.unpackedDim}}{% if not loop.last %},
+// Retain UVMF public type, macro and C symbol names for existing DPI integrations.
+class {{name}}_driver_proxy {{macro.paramDeclare(paramDefs)|indent(2)}} extends dpi_link_proxy;
+{{macro.objUtils([name, '_driver_proxy']|join(''), paramDefs)}}
+{% if useStructBfm %}
+  `{{name}}_INITIATOR_STRUCT
+  `{{name}}_RESPONDER_STRUCT
 {% endif %}
-{% endfor %}    );
-             c_bit_array_t c_{{name}}_bit_array;
-             {% if responseList|length >0 %} c_{{name}}_bit_array = { {% for txn in responseList %}{{txn.name}}{% if not loop.last %},{% endif %}
-{% endfor %}}; {% endif %}
-C_do_response_ready( get_xrtl_path(), c_{{name}}_bit_array );
-       endfunction
 
+  // pragma uvmf custom class_item_additional begin
+  // pragma uvmf custom class_item_additional end
+
+  function new(string name = "xrtl_path");
+    super.new(name);
+  endfunction
+
+  `dpi_link_proxy_get({{name}}_driver_proxy{{macro.paramUse(paramDefs)|indent(4)}})
+
+  function void configure(uvmf_active_passive_t act_pass,
+      uvmf_initiator_responder_t init_resp{% for config in configVars %},
+      {{config.type}} {{config.name}} {{config.unpackedDim}}{% endfor %});
+    c_bit_array_t bit_vec;
+    bit_vec = {act_pass, init_resp{% for config in configVars %}, {{config.name}}{% endfor %}};
+    C_configure(get_xrtl_path(), bit_vec);
+  endfunction
+
+{% if useStructBfm %}
+  task initiate_and_get_response(input {{name}}_initiator_s initiator,
+      output {{name}}_responder_s responder);
+    c_bit_array_t bit_vec;
+    bit_vec = initiator;
+    C_access(get_xrtl_path(), bit_vec);
+    responder = bit_vec;
+  endtask
+
+  task respond_and_wait_for_next_transfer(output {{name}}_initiator_s initiator,
+      input {{name}}_responder_s responder);
+    c_bit_array_t bit_vec;
+    bit_vec = responder;
+    C_response(get_xrtl_path(), bit_vec);
+    initiator = bit_vec;
+  endtask
+{% else %}
+  task initiate_and_get_response({{name}}_transaction{{macro.paramUse(paramDefs)|indent(4)}} txn);
+    c_bit_array_t bit_vec;
+    bit_vec = { {% for txn in transVars %}txn.{{txn.name}}{{macro.commalist(loop)}}{% endfor %} };
+    C_access(get_xrtl_path(), bit_vec);
+    { {% for txn in transVars %}txn.{{txn.name}}{{macro.commalist(loop)}}{% endfor %} } = bit_vec;
+  endtask
+
+  task respond_and_wait_for_next_transfer({{name}}_transaction{{macro.paramUse(paramDefs)|indent(4)}} txn);
+    c_bit_array_t bit_vec;
+    bit_vec = { {% for txn in transVars %}txn.{{txn.name}}{{macro.commalist(loop)}}{% endfor %} };
+    C_response(get_xrtl_path(), bit_vec);
+    { {% for txn in transVars %}txn.{{txn.name}}{{macro.commalist(loop)}}{% endfor %} } = bit_vec;
+  endtask
+{% endif %}
+
+{% for method in ['access', 'response'] %}
+  task {{method}}({% if useStructBfm %}{% for txn in transVars %}
+      inout {{txn.type}} {{txn.name}} {{txn.unpackedDim}}{{macro.commalist(loop)}}{% endfor %}
+{% else %}{{name}}_transaction{{macro.paramUse(paramDefs)|indent(4)}} txn{% endif %});
+    c_bit_array_t bit_vec;
+    bit_vec = { {% for txn in transVars %}{% if not useStructBfm %}txn.{% endif %}{{txn.name}}{{macro.commalist(loop)}}{% endfor %} };
+    C_{{method}}(get_xrtl_path(), bit_vec);
+    { {% for txn in transVars %}{% if not useStructBfm %}txn.{% endif %}{{txn.name}}{{macro.commalist(loop)}}{% endfor %} } = bit_vec;
+  endtask
+{% endfor %}
+
+  function void do_response_ready({% for txn in responseList %}
+      input {{txn.type}} {{txn.name}} {{txn.unpackedDim}}{{macro.commalist(loop)}}{% endfor %});
+    c_bit_array_t bit_vec = '0;
+{% if responseList|length > 0 %}
+    bit_vec = { {% for txn in responseList %}{{txn.name}}{{macro.commalist(loop)}}{% endfor %} };
+{% endif %}
+    C_do_response_ready(get_xrtl_path(), bit_vec);
+  endfunction
 endclass
-
 
 // pragma uvmf custom external begin
 // pragma uvmf custom external end
-
 {% endblock %}

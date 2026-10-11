@@ -30,12 +30,21 @@ class ScoreboardContractTest(unittest.TestCase):
           self.assertLess(check.end(),first_index.start())
           self.assertIn("scoreboard_enabled && enable_"+port+"_port",body[:check.start()])
 
+  def test_array_named_blocks_do_not_shadow_their_conditions(self):
+    text = (SOURCE / "uvmf_in_order_race_scoreboard_array.svh").read_text(encoding="utf-8")
+    blocks = re.findall(r"if\s*\(([^;]*?)\)\s*begin\s*:\s*(\w+)",text,re.DOTALL)
+    self.assertTrue(blocks)
+    for condition,label in blocks:
+      with self.subTest(label=label):
+        self.assertIsNone(re.search(r"\b"+re.escape(label)+r"\b",condition),
+                          "Named block shadows a value in its own condition")
+
   def test_race_disabled_ports_return_before_counters_events_or_storage(self):
     text = (SOURCE / "uvmf_out_of_order_race_scoreboard.svh").read_text(encoding="utf-8")
     for port in ("expected","actual"):
       with self.subTest(port=port):
         body = function(text,"write_"+port)
-        guard = "if (!scoreboard_enabled || !enable_"+port+"_port) return;"
+        guard = "if (!scoreboard_enabled || !enable_"+port+"_port) begin\n      return;\n    end"
         self.assertIn(guard,body)
         for operation in ("->entry_received;","compare_or_store_entry(t);"):
           self.assertLess(body.index(guard),body.index(operation))

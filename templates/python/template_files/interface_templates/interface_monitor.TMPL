@@ -47,7 +47,11 @@ class {{name}}_monitor {{macro.paramDeclare(paramDefs)|indent(6)}} extends uvmf_
 // using the configuration struct.
 
    virtual function void configure(input CONFIG_T cfg);
-{% if useStructBfm %}
+{% if useDpiLink %}
+    // Keep the established DPI scalar ABI for both object and struct BFMs.
+    bfm.configure(cfg.active_passive, cfg.initiator_responder{% for config in configVars %},
+        cfg.{{config.name}}{% endfor %});
+{% elif useStructBfm %}
       bfm.configure( cfg.to_struct() );
 {% else %}
       bfm.configure( cfg );

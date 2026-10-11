@@ -208,18 +208,11 @@ end
 
 
 {% if useDpiLink %}
-  function void configure( input c_bit_array_t bit_vec_in);
+  // Preserve the public C symbol and vector layout used by uvmf_tc.cpp.
+  function automatic void configure(input c_bit_array_t bit_vec_in);
     uvmf_active_passive_t act_pass;
-    uvmf_initiator_responder_t init_resp;
-{% for config in configVars %}
-    {{config.type}} {{config.name}};
-{% endfor %}
-    {
-    act_pass,
-    init_resp{% if configVars|length > 0 %},{% endif %}
-{% for config in configVars %}     {{config.name}}{% if loop.last %}}{% else %},{% endif %}
-{% endfor %}
-    } = bit_vec_in;
+    {act_pass, initiator_responder{% for config in configVars %}, {{config.name}}{% endfor %}}
+        = bit_vec_in;
 {% else %}
 {% if useStructBfm %}
   function void configure({{name}}_configuration_s {{name}}_configuration_arg);
@@ -458,6 +451,47 @@ bit first_transfer=1;
 // pragma uvmf custom respond_and_wait_for_next_transfer end
 
 {% if useDpiLink %}
+  // DPI adapters invoke the same customizable protocol tasks as virtual-interface mode.
+  // Existing C export names are retained for integration compatibility.
+  task automatic bfm_access(input c_bit_array_t bit_vec_in,
+      output c_bit_array_t bit_vec_out);
+{% if useStructBfm %}
+    {{name}}_initiator_s initiated;
+    {{name}}_responder_s responded;
+    initiated = bit_vec_in;
+    initiate_and_get_response(initiated, responded);
+    bit_vec_out = responded;
+{% else %}
+    {{name}}_transaction{{macro.paramUse(paramDefs)}} txn;
+    txn = {{name}}_transaction{{macro.paramUse(paramDefs)}}::type_id::create("txn");
+    { {% for txn in transVars %}txn.{{txn.name}}{{macro.commalist(loop)}}{% endfor %} } = bit_vec_in;
+    initiate_and_get_response(txn);
+    bit_vec_out = { {% for txn in transVars %}txn.{{txn.name}}{{macro.commalist(loop)}}{% endfor %} };
+{% endif %}
+  endtask
+
+  task automatic response(input c_bit_array_t bit_vec_in,
+      output c_bit_array_t bit_vec_out);
+{% if useStructBfm %}
+    {{name}}_initiator_s initiated;
+    {{name}}_responder_s responded;
+    responded = bit_vec_in;
+    respond_and_wait_for_next_transfer(initiated, responded);
+    bit_vec_out = initiated;
+{% else %}
+    {{name}}_transaction{{macro.paramUse(paramDefs)}} txn;
+    txn = {{name}}_transaction{{macro.paramUse(paramDefs)}}::type_id::create("txn");
+    { {% for txn in transVars %}txn.{{txn.name}}{{macro.commalist(loop)}}{% endfor %} } = bit_vec_in;
+    respond_and_wait_for_next_transfer(txn);
+    bit_vec_out = { {% for txn in transVars %}txn.{{txn.name}}{{macro.commalist(loop)}}{% endfor %} };
+{% endif %}
+  endtask
+
+  function automatic void do_response_ready(input c_bit_array_t bit_vec_in);
+    // This optional hook is used by custom protocols requiring an early response.
+    // pragma uvmf custom dpi_do_response_ready begin
+    // pragma uvmf custom dpi_do_response_ready end
+  endfunction
 endmodule
 {% else %}
 endinterface

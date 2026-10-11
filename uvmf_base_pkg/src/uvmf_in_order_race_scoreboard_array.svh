@@ -183,12 +183,17 @@ class uvmf_in_order_race_scoreboard_array #(
   // This task is used to implement a mechanism to delay run_phase termination to allow the scoreboard time to drain.
   virtual task wait_for_scoreboard_drain();
     bit entries_remaining;
-    foreach (expected_results_q[i]) if (expected_results_q[i].size() != 0) entries_remaining |= 1;
-    while (entries_remaining) begin : while_entries_remaining
-      @entry_received;
+    // Either stream can arrive first; both sides must empty before the phase can end.
+    do begin
       entries_remaining = 0;
-      foreach (expected_results_q[i]) if (expected_results_q[i].size() != 0) entries_remaining |= 1;
-    end : while_entries_remaining
+      foreach (expected_results_q[i]) begin
+        entries_remaining |= (expected_results_q[i].size() != 0) ||
+                             (actual_results_q[i].size() != 0);
+      end
+      if (entries_remaining) begin
+        @entry_received;
+      end
+    end while (entries_remaining);
   endtask
 
   // FUNCTION: check_phase
@@ -197,7 +202,7 @@ class uvmf_in_order_race_scoreboard_array #(
     T   expected_transaction;
     int fifo_entry;
     super.check_phase(phase);
-    if (end_of_test_empty_check) begin : end_of_test_empty_check
+    if (end_of_test_empty_check) begin : check_remaining_entries
       foreach (expected_results_q[i]) begin : foreach_expected_results_q
         // Check expected fifo
         if (expected_results_q[i].size() != 0) begin : expected_entries_remain
@@ -229,7 +234,7 @@ class uvmf_in_order_race_scoreboard_array #(
           `uvm_error("SCBD", "ACTUAL SCOREBOARD NOT EMPTY");
         end : actual_entries_remain
       end : foreach_expected_results_q
-    end : end_of_test_empty_check
+    end : check_remaining_entries
   endfunction
 
 endclass : uvmf_in_order_race_scoreboard_array

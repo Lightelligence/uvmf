@@ -159,13 +159,15 @@ end
       do_monitor( );
 {% endif %}
 {% if useDpiLink %}
+{% if useStructBfm %}
+      C_{{name}}_notify_transaction({{name}}_monitor_struct);
+{% else %}
       C_{{name}}_notify_transaction({
 {% for txn in transVars %}
-        {{txn.name}}{% if not loop.last %},
-{% endif %}
+          monitored_trans.{{txn.name}}{{macro.commalist(loop)}}
 {% endfor %}
-{% if useDpiLink %}
-      } {% endif %} );
+      });
+{% endif %}
 {% else %}
 {% if useStructBfm %}
       proxy.notify_transaction( {{name}}_monitor_struct );
@@ -184,14 +186,12 @@ end
   // and the monitor BFM needs to be aware of the new configuration
   // variables.
 
-  {% if useDpiLink %}
-   function void configure( c_bit_array_t bit_vec);
+{% if useDpiLink %}
+  // Preserve the public C symbol and vector layout used by uvmf_tc.cpp.
+  function automatic void configure(input c_bit_array_t bit_vec);
     uvmf_active_passive_t act_pass;
-    uvmf_initiator_responder_t init_resp;
-{% for config in configVars %}
-    {{config.type}} {{config.name}};
-{% endfor %}
-    {act_pass,init_resp{% for config in configVars %},{{config.name}}{% endfor %}} = bit_vec;
+    {act_pass, initiator_responder{% for config in configVars %}, {{config.name}}{% endfor %}}
+        = bit_vec;
 {% else %}
 {% if useStructBfm %}
   function void configure({{name}}_configuration_s {{name}}_configuration_arg);

@@ -116,6 +116,9 @@ def main():
     [sys.executable, str(REPO_ROOT / "scripts" / "test_unmarked_migration.py")],
     [sys.executable, str(REPO_ROOT / "scripts" / "test_scoreboard_contracts.py")],
     [sys.executable, str(REPO_ROOT / "scripts" / "test_soc_integration.py")],
+    [sys.executable, str(REPO_ROOT / "scripts" / "test_generator_inputs.py")],
+    [sys.executable, str(REPO_ROOT / "scripts" / "test_generator_diagnostics.py")],
+    [sys.executable, str(REPO_ROOT / "scripts" / "test_generated_contracts.py")],
     [sys.executable, str(REPO_ROOT / "scripts" / "test_vendor_neutrality.py")],
     ["git", "diff", "--check"],
   ]

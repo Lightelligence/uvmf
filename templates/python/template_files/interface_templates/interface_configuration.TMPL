@@ -204,7 +204,7 @@ class {{name}}_configuration {{macro.paramDeclare(paramDefs)|indent(6)}} extends
   // FUNCTION: get_sequencer
   function uvm_sequencer #({{name}}_transaction{{macro.paramUse(paramDefs)|indent(7)}}) get_sequencer();
     return sequencer;
-  endfunction
+  endfunction : get_sequencer
 
 endclass
 

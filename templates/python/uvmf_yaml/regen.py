@@ -166,9 +166,30 @@ class Merge(Base):
       self.new_root,fname,'read of generated merge input'
     )
     ## Figure out path of this new file in the 'old' directory structure (may not exist in 'old')
-    self.old_fname = self.assert_destination(
+    self.destination_fname = self.assert_destination(
       self.replace_basedir(new_fname,self.new_root,self.old_root)
     )
+    self.old_fname = self.destination_fname
+    # Older UVMF releases included generated class headers as .svh. Preserve
+    # their custom blocks in the .sv file that the new package will include.
+    # Keep the original header as recovery evidence; subsequent merges use .sv.
+    if (
+      new_fname.endswith('.sv')
+      and not os.path.exists(self.destination_fname)
+      and not os.path.lexists(new_fname+'h')
+      and os.path.lexists(self.destination_fname+'h')
+    ):
+      legacy_fname = self.assert_destination(self.destination_fname+'h')
+      if legacy_fname not in self.rd:
+        raise UserError('Legacy source was not parsed for named blocks: '+legacy_fname)
+      with open(legacy_fname,'r',encoding='utf-8') as handle:
+        legacy_text = handle.read()
+      if 'Created with uvmf_gen version' in legacy_text:
+        self.old_fname = legacy_fname
+      elif self.rd[legacy_fname]:
+        raise UserError(
+          'Ambiguous legacy source with custom blocks and no generator signature: '+legacy_fname
+        )
     self.current_generated_dependencies = self.generated_dependencies(new_fname)
     ## Check if old file doesn't exist in the new. If it doesn't, we need to copy from new to old
     if not os.path.exists(self.old_fname):
@@ -297,7 +318,7 @@ class Merge(Base):
           self.tmp_fname = None
           raise UserError('Potential loss of hand edits:\n  File: {0}\n  Label: "{1}"\nThe new output does not contain this custom block. Restore the generating YAML component, or use --merge_skip_missing_blocks after reviewing the backup.'.format(self.old_fname,l))
     os.chmod(self.tmp_fname,self.old_mode)
-    self.pending_replacements.append((self.tmp_fname,self.old_fname))
+    self.pending_replacements.append((self.tmp_fname,self.destination_fname))
     self.tmp_fname = None
 
   def apply_pending(self):

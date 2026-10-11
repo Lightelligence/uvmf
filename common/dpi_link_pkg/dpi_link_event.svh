@@ -43,7 +43,7 @@ class dpi_link_event extends uvm_object;
   protected int ret_val;
 
   protected static bit initialized = 0;
-  protected
+  // UVM factory registries construct this public type outside its class scope.
   function new(string name = "", string event_name = "");
     super.new(name);
     if (!initialized) begin

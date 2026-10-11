@@ -908,7 +908,7 @@ class SocIntegrationTest(unittest.TestCase):
       )
       self.assertIn("foreach (ucie_apb_env_interface_names[i]) begin",configuration)
       self.assertIn(
-        "ucie_apb_env_interface_names[i]     = interface_names[0 + i*1:0 + (i+1)*1 - 1];",
+        "interface_names[0 + i * 1 + j];",
         configuration,
       )
       self.assertIn(

@@ -35,78 +35,187 @@
 //             with 1 representing a successful compare.
 // - get_key() which returns an integer which is used as a key for the associative array
 //             within the scoreboard.
-// There are no ordering requirements for successful comparison. There are no assumptions
-// made about the relative timing of the two streams of data. Comparisons are initiated
-// by the arrival of transactions through the write interface.
+// Different keys may arrive in any order. Repeated entries for the same key are
+// matched in FIFO order within each source. Either stream may arrive first;
+// comparisons are initiated by arrivals through the write interface.
 
 
 // PARAMETERS:
 //    T    - Specifies the type of transactions to be compared.
 //           Must be derived from uvmf_transaction_base.
 
+// Keep the public class, type parameter and method names for UVMF API compatibility.
 class uvmf_out_of_order_race_scoreboard #(
     type T = uvmf_transaction_base,
-    type BASE_T = uvmf_out_of_order_scoreboard#(T)
+    type BASE_T = uvmf_out_of_order_scoreboard #(T)
 ) extends BASE_T;
 
-  `uvm_component_param_utils(uvmf_out_of_order_race_scoreboard#(T, BASE_T))
+  // expected_hash remains the oldest expected entry for each key, as in the base class.
+  // Extra expected entries and early actual entries must retain their source and order.
+  typedef T transaction_queue_t[$];
+  protected transaction_queue_t expected_pending[int unsigned];
+  protected transaction_queue_t actual_pending[int unsigned];
+  protected bit entry_is_expected = 0;
 
-  // FUNCTION: new
+  `uvm_component_param_utils(uvmf_out_of_order_race_scoreboard #(T, BASE_T))
+
+  // Explicit constructors avoid a dependency on lowRISC-specific dv_macros.svh.
   function new(string name, uvm_component parent);
     super.new(name, parent);
   endfunction : new
 
-  // FUNCTION: write_expected
-  // Transactions arrive through this interface from one or more predictors.
-  // Transactions are either compared against a transaction with a matching key
-  // or stored in the hash if a transaction with a matching key does not exist.
   virtual function void write_expected(input T t);
-    if (!scoreboard_enabled || !enable_expected_port) return;
+    bit previous_source;
+    if (!scoreboard_enabled || !enable_expected_port) begin
+      return;
+    end
     transaction_count++;
-    ->entry_received;
+    previous_source = entry_is_expected;
+    entry_is_expected = 1;
     compare_or_store_entry(t);
-  endfunction
+    entry_is_expected = previous_source;
+    ->entry_received;
+  endfunction : write_expected
 
-  // FUNCTION: write_actual
-  // Transactions arrive through this interface from one or more DUT output monitors.
-  // Transactions are either compared against a transaction with a matching key
-  // or stored in the hash if a transaction with a matching key does not exist.
   virtual function void write_actual(input T t);
-    if (!scoreboard_enabled || !enable_actual_port) return;
-    ->entry_received;
+    bit previous_source;
+    if (!scoreboard_enabled || !enable_actual_port) begin
+      return;
+    end
+    previous_source = entry_is_expected;
+    entry_is_expected = 0;
     compare_or_store_entry(t);
-  endfunction
+    entry_is_expected = previous_source;
+    ->entry_received;
+  endfunction : write_actual
 
+  // Retain the one-argument virtual hook for existing overrides. Direct calls are
+  // actual-side writes; write_* save and restore context for nested callbacks.
   virtual function void compare_or_store_entry(input T t);
-    T expected_item;
-    if (scoreboard_enabled) begin : in_compare_or_store_entry
-      // Test if matching item exists in expected hash
-      if (expected_hash.exists(t.get_key())) begin : item_exists_in_array
-        expected_item = expected_hash[t.get_key()];
-        expected_hash.delete(t.get_key());
-        // Exit function if comparison is disabled
-        if (disable_entry_compare) begin : comparison_disabled
-          `uvm_warning("SCBD", "COMPARISONS DISABLED")
-          return;
-        end : comparison_disabled
-        // Compare actual transaction to expected transaction
-        last_expected = expected_item;
-        last_actual   = t;
-        if (t.compare(expected_item)) begin : compare_passed
-          match_count++;
-          last_mismatched = 0;
-          `uvm_info("SCBD", compare_message("MATCH! - ", expected_item, t), UVM_MEDIUM)
-        end : compare_passed
-        else begin : compare_failed
-          mismatch_count++;
-          last_mismatched = 1;
-          `uvm_error("SCBD", compare_message("MISMATCH! - ", expected_item, t))
-        end : compare_failed
-      end : item_exists_in_array
-      else begin : no_item_exists_in_array_add_item_to_array
-        expected_hash[t.get_key()] = t;
-      end : no_item_exists_in_array_add_item_to_array
-    end : in_compare_or_store_entry
+    T other_item;
+    int unsigned key;
+    if (!scoreboard_enabled) begin
+      return;
+    end
+    key = t.get_key();
+    if (entry_is_expected) begin
+      if (actual_pending.exists(key)) begin
+        other_item = actual_pending[key].pop_front();
+        if (actual_pending[key].size() == 0) begin
+          actual_pending.delete(key);
+        end
+        compare_entries(t, other_item);
+      end else if (expected_hash.exists(key)) begin
+        expected_pending[key].push_back(t);
+      end else begin
+        expected_hash[key] = t;
+      end
+    end else if (expected_hash.exists(key)) begin
+      other_item = expected_hash[key];
+      if (expected_pending.exists(key)) begin
+        expected_hash[key] = expected_pending[key].pop_front();
+        if (expected_pending[key].size() == 0) begin
+          expected_pending.delete(key);
+        end
+      end else begin
+        expected_hash.delete(key);
+      end
+      compare_entries(other_item, t);
+    end else begin
+      actual_pending[key].push_back(t);
+    end
   endfunction : compare_or_store_entry
+
+  virtual function void compare_entries(T expected, T actual);
+    if (disable_entry_compare) begin
+      `uvm_warning("SCBD", "COMPARISONS DISABLED")
+      return;
+    end
+    last_expected = expected;
+    last_actual = actual;
+    if (actual.compare(expected)) begin
+      match_count++;
+      last_mismatched = 0;
+      `uvm_info("SCBD", compare_message("MATCH! - ", expected, actual), UVM_MEDIUM)
+    end else begin
+      mismatch_count++;
+      last_mismatched = 1;
+      `uvm_error("SCBD", compare_message("MISMATCH! - ", expected, actual))
+    end
+  endfunction : compare_entries
+
+  virtual function void flush_scoreboard();
+    super.flush_scoreboard();
+    expected_pending.delete();
+    actual_pending.delete();
+    ->entry_received;
+  endfunction : flush_scoreboard
+
+  // Remove the oldest unmatched entry for this key from whichever side owns it.
+  virtual function void remove_entry(int unsigned key = 0);
+    T removed_item;
+    if (expected_hash.exists(key)) begin
+      if (expected_pending.exists(key)) begin
+        expected_hash[key] = expected_pending[key].pop_front();
+        if (expected_pending[key].size() == 0) begin
+          expected_pending.delete(key);
+        end
+      end else begin
+        expected_hash.delete(key);
+      end
+    end else if (actual_pending.exists(key)) begin
+      removed_item = actual_pending[key].pop_front();
+      if (actual_pending[key].size() == 0) begin
+        actual_pending.delete(key);
+      end
+    end
+    ->entry_received;
+  endfunction : remove_entry
+
+  virtual task wait_for_scoreboard_drain();
+    while ((expected_hash.num() != 0) || (expected_pending.num() != 0) ||
+           (actual_pending.num() != 0)) begin
+      @entry_received;
+    end
+  endtask : wait_for_scoreboard_drain
+
+  virtual function void check_phase(uvm_phase phase);
+    T item;
+    int unsigned printed = 0;
+    // The inherited check covers expected_hash and the expected-side activity count.
+    super.check_phase(phase);
+    if (!end_of_test_empty_check) begin
+      return;
+    end
+    if (expected_pending.num() != 0) begin
+      foreach (expected_pending[key]) begin
+        while ((expected_pending[key].size() != 0) &&
+               (printed < max_remaining_transaction_print)) begin
+          item = expected_pending[key].pop_front();
+          `uvm_info("SCBD", $sformatf("Expected entry %0d:%s", printed++,
+                                   item.convert2string()), UVM_MEDIUM)
+        end
+        if (expected_pending[key].size() == 0) begin
+          expected_pending.delete(key);
+        end
+      end
+      `uvm_error("SCBD", "EXPECTED SCOREBOARD NOT EMPTY")
+    end
+    if (actual_pending.num() != 0) begin
+      printed = 0;
+      foreach (actual_pending[key]) begin
+        while ((actual_pending[key].size() != 0) &&
+               (printed < max_remaining_transaction_print)) begin
+          item = actual_pending[key].pop_front();
+          `uvm_info("SCBD", $sformatf("Actual entry %0d:%s", printed++,
+                                   item.convert2string()), UVM_MEDIUM)
+        end
+        if (actual_pending[key].size() == 0) begin
+          actual_pending.delete(key);
+        end
+      end
+      `uvm_error("SCBD", "ACTUAL SCOREBOARD NOT EMPTY")
+    end
+  endfunction : check_phase
 
 endclass : uvmf_out_of_order_race_scoreboard

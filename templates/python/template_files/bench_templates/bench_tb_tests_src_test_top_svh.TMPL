@@ -20,7 +20,8 @@ typedef {{env_name}}_env_configuration {{macro.paramUseNested(envParamDefs)|inde
 typedef {{env_name}}_environment {{macro.paramUseNested(envParamDefs)|indent(8)}}{{env_name}}_environment_t;
 typedef {{env_name}}_env_sequence_base #(
   .CONFIG_T({{env_name}}_env_configuration_t),
-  .ENV_T   ({{env_name}}_environment_t)
+  .ENV_T   ({{env_name}}_environment_t){% for param in envParamDefs %},
+  .{{param.name}}({{param.value}}){% endfor %}{{ "\n" -}}
 ) {{env_name}}_env_sequence_base_t;
 
 // pragma uvmf custom description begin

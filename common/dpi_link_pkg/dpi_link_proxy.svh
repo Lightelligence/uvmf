@@ -21,7 +21,7 @@ class dpi_link_proxy extends uvm_object;
 
   dpi_link_event dpi_link_event_h;
 
-  protected
+  // UVM factory registries construct this public type outside its class scope.
   function new(string name = "");
     dpi_link_proxy_pool pool_h;
     super.new(name);
