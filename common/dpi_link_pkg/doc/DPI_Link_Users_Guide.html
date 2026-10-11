@@ -1090,7 +1090,7 @@ endclass
 
 <ol>
 <li>Compile <code>dpi_link_pkg.sv</code> after its UVM and UVMF dependencies and before generated interface packages that import it. Make the headers in <code>common/dpi_link_pkg</code> available to SystemVerilog compilation.</li>
-<li>Compile <code>common/dpi_link_pkg/dpi_link.cpp</code> and the generated interface <code>*_tc.cpp</code> bridges using a C++ compiler compatible with the selected simulator. Include <code>common/dpi_link_pkg</code> and that simulator's <code>svdpi.h</code> directory.</li>
+<li>Compile <code>common/dpi_link_pkg/dpi_link.cpp</code>, <code>common/dpi_link_pkg/uvmf_tc.cpp</code>, and the generated interface <code>*_tc.cpp</code> bridges using a C++ compiler compatible with the selected simulator, with C++11 or newer enabled. Include <code>common/dpi_link_pkg</code> and that simulator's <code>svdpi.h</code> directory.</li>
 <li>If a bridge includes <code>dpiheader.h</code>, generate the DPI declarations from the same SystemVerilog sources using the selected simulator and expose that header to C++ compilation. Do not create an empty header to satisfy a build dependency.</li>
 <li>Link or load the resulting DPI code through your project's VCS or Xcelium build integration. Use matching simulator headers, library architecture and compiler ABI; do not reuse a library built against another simulator.</li>
 <li>Run a project-specific simulation that exercises the DPI imports, exports, scope lookup and event synchronization before relying on the integration.</li>

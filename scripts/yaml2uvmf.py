@@ -842,19 +842,55 @@ class DataClass:
       self.traverseNodes(node)
 
   def elaborateNodeParameters(self,node):
-    # At the given node, we may have some local parameters and associated values as well
-    # as some children with parameter values. For each local parameter prep for a substitution
-    # that will replace references of the parameter NAME with the parameter VALUE in a
-    # given string. Then, loop through each each child and child parameters, applying that
-    # replacement to each child parameter value, replacing parent parameter NAME with it's own VALUE.
-    if 'parameters' in node.info:
-      for parent_p in node.info['parameters']:
-        for child_node in node.children:
-          if 'parameters' in child_node.info:
-            for child_p in child_node.info['parameters']:
-              #print("BEFORE: %s:%s - %s" % (child_node.path(),child_p['name'],child_p['value']))
-              child_p['value'] = child_p['value'].replace(parent_p['name'],parent_p['value'])
-              #print("AFTER : %s:%s - %s" % (child_node.path(),child_p['name'],child_p['value']))
+    # Resolve identifiers simultaneously, rather than replacing substrings in
+    # declaration order. Keep literals, comments, macros and qualified names
+    # intact; they are not references to a local parameter.
+    parameters = {p['name']: p for p in node.info.get('parameters',[])}
+    definitions = self.data['environments'].get(node.type,{}).get('parameters',[])
+    parameter_types = {p['name']: p['type'] for p in definitions}
+    token_pattern = re.compile(
+      r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/|\\\S+|'
+      r"(?:[0-9][0-9_]*\s*)?'[sS]?[bBoOdDhH][0-9a-fA-F_xXzZ?]+|"
+      r"'[01xXzZ]|[0-9][0-9_a-zA-Z.]*|`[a-zA-Z_][a-zA-Z0-9_$]*|"
+      r'(?P<identifier>[a-zA-Z_$][a-zA-Z0-9_$]*)',
+      re.DOTALL,
+    )
+    resolved = {}
+
+    def substitute(expression,stack):
+      expression = str(expression)
+
+      def replace(match):
+        name = match.group('identifier')
+        if name not in parameters:
+          return match.group(0)
+        prefix = expression[:match.start()].rstrip()
+        suffix = expression[match.end():].lstrip()
+        if prefix.endswith(('::','.')) or suffix.startswith('::'):
+          return name
+        value = resolve(name,stack)
+        # An expression used as an operand needs parentheses to retain its
+        # precedence. Type parameters must retain their type syntax instead.
+        if (match.span() != (0,len(expression))
+            and parameters[name].get('type',parameter_types.get(name)) != 'type'
+            and not re.fullmatch(r'[a-zA-Z_$][a-zA-Z0-9_$]*|[0-9][0-9_]*',value)):
+          return '('+value+')'
+        return value
+
+      return token_pattern.sub(replace,expression)
+
+    def resolve(name,stack):
+      if name in resolved:
+        return resolved[name]
+      if name in stack:
+        raise UserError('Cyclic parameter reference at "{0}": {1}'.format(
+          node.path(),' -> '.join(stack+[name])))
+      resolved[name] = substitute(parameters[name]['value'],stack+[name])
+      return resolved[name]
+
+    for child_node in node.children:
+      for child_p in child_node.info.get('parameters',[]):
+        child_p['value'] = substitute(child_p['value'],[])
 
   def resolveDefaultParams(self,child_node,parent_node):
     if child_node.classification == 'agt':
@@ -1155,62 +1191,29 @@ class DataClass:
       except KeyError:
         ac_params = []
         pass
-      ## Don't go through the trouble of poking at the definition of the analysis component if it was already
-      ## used before.  Just instantiate it
-      try:
-        extdef = (ac_item['extdef'] == 'True')
-        env_has_extdef_items = True
-      except KeyError:
-        extdef = False
-        pass
-      if (ac_type not in defined_ac_items) and (not extdef):
+      extdef = ac_item.get('extdef') == 'True'
+      env_has_extdef_items = env_has_extdef_items or extdef
+      ports,exports,vip_exports = {},{},{}
+      if not extdef:
         try:
           definition = self.data['util_components'][ac_type]
         except KeyError:
           raise UserError("No definition found for component \""+ac_name+"\" of type \""+ac_type)
         ac_type_type = definition['type']
-        exports = {}
-        try:
-          for item in definition['analysis_exports']:
-            exports[item['name']] = item['type']
-        except KeyError: pass
-        ports = {}
-        try:
-          for item in definition['analysis_ports']:
-            ports[item['name']] = item['type']
-        except KeyError: pass
-        vip_exports = {}
-        try:
-          for item in definition['vip_analysis_exports']:
-            vip_exports[item['name']] = item['type']
-        except KeyError: pass
-        try:
-          parameters = definition['parameters']
-        except KeyError:
-          parameters = []
-          pass
-        env.defineAnalysisComponent(ac_type_type,ac_type,exports,ports,vip_exports,parameters)
-        defined_ac_items = defined_ac_items + [ac_type]
-        if ac_type not in self.used_ac_items:
-          self.used_ac_items = self.used_ac_items + [ac_type]
-      if not extdef:
-        self.check_parameters('environment',name,ac_type_type,ac_name,ac_type,ac_params,self.data['util_components'][ac_type])
+        ports = {item['name']: item['type'] for item in definition.get('analysis_ports',[])}
+        exports = {item['name']: item['type'] for item in definition.get('analysis_exports',[])}
+        vip_exports = {item['name']: item['type'] for item in definition.get('vip_analysis_exports',[])}
+        if ac_type not in defined_ac_items:
+          env.defineAnalysisComponent(ac_type_type,ac_type,exports,ports,vip_exports,
+                                      definition.get('parameters',[]))
+          defined_ac_items.append(ac_type)
+          if ac_type not in self.used_ac_items:
+            self.used_ac_items.append(ac_type)
+        self.check_parameters('environment',name,ac_type_type,ac_name,ac_type,ac_params,definition)
       env.addAnalysisComponent(ac_name,ac_type,ac_params,extdef)
-      try: ports
-      except NameError: ports = None
-      if ports is not None:
-        for ap in ports:
-          valid_ap_list = valid_ap_list + [ac_name+"."+ap]
-      try: exports
-      except NameError: exports = None
-      if exports is not None:
-        for ae in exports:
-          valid_ae_list = valid_ae_list + [ac_name+"."+ae]
-      try: vip_exports
-      except NameError: vip_exports = None
-      if vip_exports is not None:
-        for qae in vip_exports:
-          valid_ae_list = valid_ae_list + [ac_name+"."+qae]
+      valid_ap_list.extend(ac_name+"."+ap for ap in ports)
+      valid_ae_list.extend(ac_name+"."+ae for ae in exports)
+      valid_ae_list.extend(ac_name+"."+ae for ae in vip_exports)
     try:
       sb_items = struct['scoreboards']
     except KeyError:
@@ -1437,32 +1440,17 @@ class DataClass:
         regModelPkg=reg_model_pkg,
         regBlockClass=reg_blk_class,
         regBlockInstance=reg_blk_name)
-    try:
-      dpi_def = struct['dpi_define']
-      ca = ""
-      la = ""
-      try:
-        ca = dpi_def['comp_args']
-      except KeyError: pass
-      try:
-        la = dpi_def['link_args']
-      except KeyError: pass
-      env.setDPISOName(value=dpi_def['name'],compArgs=ca,linkArgs=la)
-      for f in dpi_def['files']:
-        env.addDPIFile(f)
-      try:
-        for imp in dpi_def['imports']:
-          sv_args = []
-          try:
-            sv_args = imp['sv_args']
-          except KeyError: pass
-          env.addDPIImport(imp['c_return_type'],imp['sv_return_type'],imp['name'],imp['c_args'],sv_args)
-      except KeyError: pass
-      try:
-        for exp in dpi_def['exports']:
-          intf.addDPIExport(exp)
-      except KeyError: pass
-    except KeyError: pass
+    dpi_def = struct.get('dpi_define')
+    if dpi_def is not None:
+      env.setDPISOName(value=dpi_def['name'],compArgs=dpi_def.get('comp_args',''),
+                        linkArgs=dpi_def.get('link_args',''))
+      for filename in dpi_def['files']:
+        env.addDPIFile(filename)
+      for imp in dpi_def.get('imports',[]):
+        env.addDPIImport(imp['c_return_type'],imp['sv_return_type'],imp['name'],
+                         imp.get('c_args',''),imp.get('sv_args',[]))
+      for exp in dpi_def.get('exports',[]):
+        env.addDPIExport(exp)
     try:
       typedefs = struct['typedefs']
       for t in typedefs:
@@ -1883,32 +1871,17 @@ class DataClass:
       intf.specifyResponseData(resp_data)
       print("Warning: response_info YAML structure deprecated.  Slave agent response data now determined by arguments to respond_and_wait_for_next_transfer task within generated driver_bfm.")
     except KeyError: pass
-    try:
-      dpi_def = struct['dpi_define']
-      ca = ""
-      la = ""
-      try:
-        ca = dpi_def['comp_args']
-      except KeyError: pass
-      try:
-        la = dpi_def['link_args']
-      except KeyError: pass
-      intf.setDPISOName(value=dpi_def['name'],compArgs=ca,linkArgs=la)
-      for f in dpi_def['files']:
-        intf.addDPIFile(f)
-      try:
-        for imp in dpi_def['imports']:
-          sv_args = []
-          try:
-            sv_args = imp['sv_args']
-          except KeyError: pass
-          intf.addDPIImport(imp['c_return_type'],imp['sv_return_type'],imp['name'],imp['c_args'],sv_args)
-      except KeyError: pass
-      try:
-        for exp in dpi_def['exports']:
-          intf.addDPIExport(exp)
-      except KeyError: pass
-    except KeyError: pass
+    dpi_def = struct.get('dpi_define')
+    if dpi_def is not None:
+      intf.setDPISOName(value=dpi_def['name'],compArgs=dpi_def.get('comp_args',''),
+                        linkArgs=dpi_def.get('link_args',''))
+      for filename in dpi_def['files']:
+        intf.addDPIFile(filename)
+      for imp in dpi_def.get('imports',[]):
+        intf.addDPIImport(imp['c_return_type'],imp['sv_return_type'],imp['name'],
+                         imp.get('c_args',''),imp.get('sv_args',[]))
+      for exp in dpi_def.get('exports',[]):
+        intf.addDPIExport(exp)
     try:
       intf.useStructBfm = (struct['use_struct_bfm'] == "True")
     except KeyError:

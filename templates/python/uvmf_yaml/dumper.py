@@ -119,7 +119,8 @@ class EnvironmentDumper:
       for p in i.parameters:
         if (p.name != "CONFIG_T"):
           params.append({'name':p.name,'value':p.value})
-      data['analysis_components'].append({'name':i.name,'type':i.type,'parameters':params}) # ,'extdef':'True'})
+      data['analysis_components'].append({'name':i.name,'type':i.type,'parameters':params,
+                                          'extdef':str(i.extDef)})
     data['scoreboards'] = []
     for i in self.obj.scoreboards:
       if (len(i.parameters)>0):

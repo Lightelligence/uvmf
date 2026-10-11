@@ -73,8 +73,9 @@ is a historical architecture reference with current build-integration notes.
 Its MCD/TBX terminology and example classes describe the original design;
 use the current generated UVMF agents and proxies when integrating DPI.
 Projects must supply their own Bazel DPI C/C++ compilation and linkage using
-the selected simulator's headers and compatible compiler. The generator does
-not provide a complete DPI C/C++ build target.
+the selected simulator's headers and compatible compiler. Compile the retained
+C++ bridges as C++11 or newer so wrapper types follow the generated DPI
+declarations. The generator does not provide a complete DPI C/C++ build target.
 
 ## Synopsys VIP integration
 
@@ -296,6 +297,25 @@ complete DV source tree:
 ```bash
 python3 "$UVMF_HOME/scripts/run_verible_lint.py" "$PROJ_DIR/hw/dv"
 ```
+
+## Focused simulator regressions
+
+The licensed contract checks exercise the scoreboards, array configuration,
+nondefault environment sequence parameters, and generated DPI agents. DPI cases
+cover struct and object transport with parameterized and nonparameterized agents;
+the simulator generates the C header from the same SV sources before C++ linkage.
+They verify bounded API behavior, rather than full DUT traffic or coverage closure.
+Run them through the authorized compute-node workflow with a new output directory:
+
+```bash
+python3 scripts/run_contract_checks.py --work-dir /path/to/new/contract-results
+```
+
+Both VCS and Xcelium are selected by default. `--simulators vcs` or
+`--simulators xcelium` selects one tool; `--runmod /path/to/runmod` uses the
+project's tool launcher. Each case records its command, exit status and log in
+`summary.json`. Success requires the fixture's completion marker and no UVM
+errors/fatals; a watchdog or compiler failure fails the check.
 
 ## Continuous integration
 

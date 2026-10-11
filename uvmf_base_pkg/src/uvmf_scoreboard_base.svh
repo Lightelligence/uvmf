@@ -48,8 +48,9 @@ class uvmf_scoreboard_base #(
 
   `uvm_component_param_utils(uvmf_scoreboard_base#(T, BASE_T))
 
-  uvm_analysis_imp_expected #(T, uvmf_scoreboard_base #(T)) expected_analysis_export;
-  uvm_analysis_imp_actual #(T, uvmf_scoreboard_base #(T)) actual_analysis_export;
+  // Preserve UVMF public type names while binding each imp to its exact specialization.
+  uvm_analysis_imp_expected #(T, uvmf_scoreboard_base #(T, BASE_T)) expected_analysis_export;
+  uvm_analysis_imp_actual #(T, uvmf_scoreboard_base #(T, BASE_T)) actual_analysis_export;
 
   // Variables used to report transaction matches and mismatches
   int match_count;

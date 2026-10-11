@@ -84,11 +84,18 @@ package {{name}}_pkg;
   `include "{{src_dir}}{{name}}_agent.sv"
 {% if useDpiLink %}
   export "DPI-C" function {{name}}_pkg_notify_transaction;
-  function void {{name}}_pkg_notify_transaction(string xrtl_path, c_bit_array_t bit_vec_in);
-    {{name}}_monitor_proxy proxy_h;
-    // get uses the xrtl_path of the monitor_bfm, to get the monitor proxy handle
-    // which has access to the {{name}}_monitor and calls its notify_transaction()
-    proxy_h = {{name}}_monitor_proxy#()::get(xrtl_path);
+  // Preserve the exported C symbol and dispatch through the registered specialization.
+  function automatic void {{name}}_pkg_notify_transaction(string xrtl_path,
+      c_bit_array_t bit_vec_in);
+    dpi_link_proxy_pool pool_h = dpi_link_proxy_pool::get_global_pool();
+    {{name}}_monitor_proxy_base proxy_h;
+    string path = dpi_link_pkg::standardized_path(xrtl_path);
+    if (!pool_h.exists(path)) begin
+      `uvm_fatal("DPI_LINK", {"No monitor proxy registered for ", path})
+    end
+    if (!$cast(proxy_h, pool_h.get(path))) begin
+      `uvm_fatal("DPI_LINK", {"Incompatible monitor proxy registered for ", path})
+    end
     proxy_h.notify_transaction_bit_vec(bit_vec_in);
   endfunction
 {% endif %}

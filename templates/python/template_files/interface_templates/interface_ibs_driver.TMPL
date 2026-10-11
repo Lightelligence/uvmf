@@ -33,7 +33,7 @@ class {{name}}_ibs_driver {{macro.paramDeclare(paramDefs)|indent(8)}} extends {{
 // ****************************************************************************
   virtual function void configure(input CONFIG_T cfg);
     bfm.configure(
-{% if useStructBfm %}
+{% if useStructBfm or useDpiLink %}
       cfg.active_passive,
       cfg.initiator_responder{% if configVars|length > 0 %},{% endif %}
 

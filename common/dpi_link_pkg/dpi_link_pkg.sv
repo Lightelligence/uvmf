@@ -23,7 +23,8 @@ package dpi_link_pkg;
   `include "mcd_macros.svh"
   `include "dpi_link_macros.svh"
 
-  import "DPI-C" function bit scope_exists(string name);
+  // Scope lookup uses svGetScopeFromName, which requires a DPI context.
+  import "DPI-C" context function bit scope_exists(input string name);
   import "DPI-C" context function void initialize_hvl_events();
 
   typedef class dpi_link_proxy;

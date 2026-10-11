@@ -1,26 +1,27 @@
+// Preserve established C symbols for existing UVMF DPI integrations.
 // Driver DPI Calls
 import "DPI-C" context function void C_configure(
-  string path,
-  input c_bit_array_t
+  input string path,
+  input c_bit_array_t bit_vec
 );
 import "DPI-C" context function void C_do_response_ready(
-  string path,
-  input c_bit_array_t
+  input string path,
+  input c_bit_array_t bit_vec
 );
 import "DPI-C" context task C_access(
-  string path,
-  inout c_bit_array_t
+  input string path,
+  inout c_bit_array_t bit_vec
 );
 import "DPI-C" context task C_response(
-  string path,
-  inout c_bit_array_t
+  input string path,
+  inout c_bit_array_t bit_vec
 );
 
 // Monitor DPI Calls
-import "DPI-C" context function void C_start_monitoring(string path);
-import "DPI-C" context task C_wait_for_reset(string path);
+import "DPI-C" context function void C_start_monitoring(input string path);
+import "DPI-C" context task C_wait_for_reset(input string path);
 import "DPI-C" context task C_wait_for_num_clocks(
-  string path,
-  input c_bit_array_t
+  input string path,
+  input c_bit_array_t bit_vec
 );
-import "DPI-C" context function void C_initialize_monitor(string path);
+import "DPI-C" context function void C_initialize_monitor(input string path);

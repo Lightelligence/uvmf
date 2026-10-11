@@ -201,6 +201,13 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
 
   function void initialize(uvmf_sim_level_t sim_level, string environment_path, string interface_names[], uvm_reg_block register_model = null, uvmf_active_passive_t interface_activity[] = {});
 
+    // Omitted activity means ACTIVE for every interface, including sub-environment arrays.
+    if (interface_activity.size() == 0) begin
+      interface_activity = new[interface_names.size()];
+      foreach (interface_activity[i]) begin
+        interface_activity[i] = ACTIVE;
+      end
+    end
     super.initialize(sim_level, environment_path, interface_names, register_model, interface_activity);
 
     // pragma uvmf custom initialize begin
@@ -215,8 +222,13 @@ class {{name}}_env_configuration{% if paramDefs|length > 0 %} {{macro.paramDecla
       {{sub_env.name}}_interface_names[i]    = new[{{sub_env.numAgents}}];
       {{sub_env.name}}_interface_activity[i] = new[{{sub_env.numAgents}}];
 
-      {{sub_env.name}}_interface_names[i]     = interface_names[{{sub_env.agentMinIndex}} + i*{{sub_env.numAgents}}:{{sub_env.agentMinIndex}} + (i+1)*{{sub_env.numAgents}} - 1];
-      {{sub_env.name}}_interface_activity[i]  = interface_activity[{{sub_env.agentMinIndex}} + i*{{sub_env.numAgents}}:{{sub_env.agentMinIndex}} + (i+1)*{{sub_env.numAgents}} - 1];
+      // Unpacked array slice bounds must be constant; copy each instance's elements.
+      for (int j = 0; j < {{sub_env.numAgents}}; j++) begin
+        {{sub_env.name}}_interface_names[i][j] =
+            interface_names[{{sub_env.agentMinIndex}} + i * {{sub_env.numAgents}} + j];
+        {{sub_env.name}}_interface_activity[i][j] =
+            interface_activity[{{sub_env.agentMinIndex}} + i * {{sub_env.numAgents}} + j];
+      end
     end
 {% else %}
     {{sub_env.name}}_interface_names    = new[{{sub_env.numAgents}}];

@@ -843,5 +843,112 @@ class RegenerationSafetyTest(unittest.TestCase):
         data.parseFile(str(config))
 
 
+  def legacy_merge_fixture(self,root,custom_label="keep"):
+    old_root,new_root = root / "old",root / "new"
+    old_root.mkdir()
+    new_root.mkdir()
+    old_file,new_file = old_root / "driver.svh",new_root / "driver.sv"
+    old_file.write_text(
+      "// Created with uvmf_gen version 2023.4_2\n"
+      "// pragma uvmf custom keep begin\n"
+      "int legacy_custom = 42;\n"
+      "// pragma uvmf custom keep end\n",encoding="utf-8",
+    )
+    new_file.write_text(
+      "// Created with uvmf_gen version 2023.4_2\n"
+      "// pragma uvmf custom {0} begin\n"
+      "// pragma uvmf custom {0} end\n".format(custom_label),encoding="utf-8",
+    )
+    parser = Parse(str(old_root),quiet=True)
+    parser.traverse_dir(str(old_root))
+    merge = Merge(str(old_root),False,str(new_root),str(old_root),quiet=True)
+    merge.load_data(parser.data)
+    return merge,old_root,new_root,old_file,new_file
+
+  def test_legacy_svh_merge_activates_custom_code_and_is_idempotent(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      config,output = root / "input.yaml",root / "output"
+      config.write_text("uvmf:\n  environments:\n    soc: {}\n",encoding="utf-8")
+      command = [sys.executable,str(REPO_ROOT / "scripts" / "yaml2uvmf.py"),
+                 "-q","-d",str(output),str(config)]
+      first = subprocess.run(command,capture_output=True,text=True,check=False)
+      self.assertEqual(first.returncode,0,first.stdout+first.stderr)
+      package = output / "verification_ip" / "environment_packages" / "soc_env_pkg"
+      modern = package / "src" / "soc_environment.sv"
+      legacy = modern.with_suffix(".svh")
+      custom = "  int legacy_custom = 42;\n"
+      text = modern.read_text(encoding="utf-8").replace(
+        "  // pragma uvmf custom class_item_additional end",
+        custom+"  // pragma uvmf custom class_item_additional end",
+      )
+      self.assertIn(custom,text)
+      modern.unlink()
+      legacy.write_text(text,encoding="utf-8")
+      pkg_file = package / "soc_env_pkg.sv"
+      pkg_file.write_text(pkg_file.read_text(encoding="utf-8").replace(
+        '"src/soc_environment.sv"','"src/soc_environment.svh"'),encoding="utf-8")
+      for repeat in range(2):
+        result = subprocess.run(command+["--merge_source",str(output)],
+                                capture_output=True,text=True,check=False)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn(custom,modern.read_text(encoding="utf-8"))
+        self.assertIn('"src/soc_environment.sv"',pkg_file.read_text(encoding="utf-8"))
+        self.assertEqual(legacy.read_text(encoding="utf-8"),text)
+        if repeat == 0:
+          snapshot = {p.relative_to(output): p.read_bytes()
+                      for p in output.rglob("*") if p.is_file()}
+      self.assertEqual(snapshot,{p.relative_to(output): p.read_bytes()
+                                 for p in output.rglob("*") if p.is_file()})
+
+  def test_legacy_svh_missing_block_keeps_original_and_no_new_file(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      merge,old_root,new_root,old_file,_ = self.legacy_merge_fixture(Path(tmp),"other")
+      original = old_file.read_bytes()
+      with self.assertRaisesRegex(UserError,"Potential loss of hand edits"):
+        merge.traverse_dir(str(new_root))
+      self.assertEqual(old_file.read_bytes(),original)
+      self.assertFalse((old_root / "driver.sv").exists())
+      self.assertFalse(list(old_root.glob("*.uvmf_merge_tmp")))
+
+  def test_legacy_svh_merge_rollback_removes_new_destination(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      root = Path(tmp)
+      merge,old_root,new_root,old_file,_ = self.legacy_merge_fixture(root)
+      merge.defer_commit = True
+      original = old_file.read_bytes()
+      merge.traverse_dir(str(new_root))
+      self.assertIn("legacy_custom",(old_root / "driver.sv").read_text(encoding="utf-8"))
+      merge.rollback()
+      self.assertFalse((old_root / "driver.sv").exists())
+      self.assertEqual(old_file.read_bytes(),original)
+      self.assertFalse(list(root.glob(".uvmf_merge_backup_*")))
+
+  def test_legacy_svh_destination_symlink_is_rejected(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      merge,old_root,new_root,old_file,_ = self.legacy_merge_fixture(Path(tmp))
+      original = old_file.read_bytes()
+      target = old_root / "custom_header.svh"
+      old_file.rename(target)
+      try:
+        old_file.symlink_to(target)
+      except OSError as error:
+        self.skipTest("Symlinks unavailable: {}".format(error))
+      with self.assertRaisesRegex(UserError,"destination symlink"):
+        merge.traverse_dir(str(new_root))
+      self.assertEqual(target.read_bytes(),original)
+      self.assertFalse((old_root / "driver.sv").exists())
+
+  def test_unproven_legacy_svh_with_custom_blocks_fails_closed(self):
+    with tempfile.TemporaryDirectory() as tmp:
+      merge,old_root,new_root,old_file,_ = self.legacy_merge_fixture(Path(tmp))
+      original = old_file.read_text(encoding="utf-8").split("\n",1)[1]
+      old_file.write_text(original,encoding="utf-8")
+      with self.assertRaisesRegex(UserError,"Ambiguous legacy source"):
+        merge.traverse_dir(str(new_root))
+      self.assertEqual(old_file.read_text(encoding="utf-8"),original)
+      self.assertFalse((old_root / "driver.sv").exists())
+
+
 if __name__ == "__main__":
   unittest.main()

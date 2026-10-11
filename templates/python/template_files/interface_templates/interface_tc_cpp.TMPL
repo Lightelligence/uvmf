@@ -25,12 +25,20 @@
 // pragma uvmf custom header begin
 // pragma uvmf custom header end
 
+// Follow the simulator-generated callback declaration, including input constness.
+template <typename Signature>
+struct {{name}}_dpi_notify_input;
+
+template <typename Result, typename PathArgument, typename VectorArgument>
+struct {{name}}_dpi_notify_input<Result (*)(PathArgument, VectorArgument)> {
+  using type = VectorArgument;
+};
+
 extern "C" {
 
-     extern void {{name}}_pkg_notify_transaction(const char* path, const svBitVecVal* bit_vec_in);
-
      void
-     C_{{name}}_notify_transaction( const svBitVecVal* bit_vec_in){
+     C_{{name}}_notify_transaction(
+         {{name}}_dpi_notify_input<decltype(&{{name}}_pkg_notify_transaction)>::type bit_vec_in){
             std::string path = svGetNameFromScope(svGetScope()); // svGetScope returns the scope passed as sideband data to this func
                                                   // svGetNameFromScope gets the path of the caller
             svScope {{name}}_pkg_scope=dpi_link::get_svScope(path.c_str());// use path to get a handle to the  scope of associated package from the hash
