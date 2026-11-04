@@ -66,6 +66,23 @@ class GeneratorDiagnosticsTest(unittest.TestCase):
   def assert_no_output(self,output):
     self.assertFalse(output.exists(),"Validation unexpectedly wrote "+str(output))
 
+  def test_component_names_cannot_select_output_paths(self):
+    for category in ("interfaces","environments","benches","util_components"):
+      for name in ("../escaped","nested/component",r"nested\component",".",".."):
+        with self.subTest(category=category,name=name):
+          definitions = {
+            "interfaces":{"clock":"clk","reset":"rst"},
+            "environments":{},
+            "benches":{"top_env":"leaf"},
+            "util_components":{"type":"predictor"},
+          }
+          data = {"uvmf":{category:{name:definitions[category]}}}
+          if category == "benches":
+            data["uvmf"]["environments"] = {"leaf":{}}
+          result,output,config = self.run_cli(data,"--check")
+          self.assert_error(result,"component name",category,config.name,"path")
+          self.assert_no_output(output)
+
   def test_known_user_error_uses_stderr_without_traceback(self):
     data = self.data()
     data["uvmf"]["benches"]["soc"]["top_env"] = "missing_environment"
