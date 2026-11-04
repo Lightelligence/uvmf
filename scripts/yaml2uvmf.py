@@ -421,6 +421,8 @@ class DataClass:
         for name,definition in incoming.items():
           if not isinstance(name,str) or not name:
             raise UserError('Component name {0!r} in {1} ({2}) must be a non-empty string'.format(name,elem,fname))
+          if name in ('.','..') or '/' in name or '\\' in name:
+            raise UserError('Component name {0!r} in {1} ({2}) must be a name, not a path; remove directory separators and dot-directory names'.format(name,elem,fname))
           if not isinstance(definition,dict):
             raise UserError('{0}.{1} in {2} must be a mapping'.format(elem,name,fname))
           self.validateInputShape(definition,elem+'.'+name,fname)
